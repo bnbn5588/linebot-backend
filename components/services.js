@@ -2,19 +2,19 @@
 const { executeQuery } = require("./db");
 
 // Function to fetch the list of wallets for the given userid
-async function getWallets(userid) {
+async function getWallets(connection, userid) {
   const sqlQuery = `
     SELECT wallet_id, wallet_name, timezone
     FROM wallet
     WHERE uname = :uname
   `;
   const params = [userid];
-  const result = await executeQuery(sqlQuery, params);
+  const result = await executeQuery(connection, sqlQuery, params);
   return result.rows;
 }
 
 // Function to fetch wallet details
-async function getWallet(userid) {
+async function getWallet(connection, userid) {
   const sqlQuery = `
       SELECT u.wallet_id, w.wallet_name, w.timezone
       FROM USERS u
@@ -23,7 +23,7 @@ async function getWallet(userid) {
       ORDER BY 1
     `;
   const params = [userid];
-  const result = await executeQuery(sqlQuery, params);
+  const result = await executeQuery(connection, sqlQuery, params);
   return result.rows.length > 0 ? result.rows : null;
 }
 

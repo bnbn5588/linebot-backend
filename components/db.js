@@ -17,30 +17,32 @@ async function getConnection() {
   }
 }
 
-// Utility function to execute queries
-async function executeQuery(query, params) {
-  let connection;
+// Utility function to close the connection
+async function closeConnection(connection) {
   try {
-    connection = await getConnection();
+    if (connection) {
+      await connection.close();
+    }
+  } catch (err) {
+    console.error("Error closing connection:", err);
+  }
+}
+
+// Utility function to execute queries
+async function executeQuery(connection, query, params) {
+  try {
     const result = await connection.execute(query, params, {
-      autoCommit: true,
+      autoCommit: true, // Commit automatically after query execution
     });
     return result;
   } catch (err) {
     console.error("Error executing query:", err);
     throw err;
-  } finally {
-    if (connection) {
-      try {
-        await connection.close();
-      } catch (err) {
-        console.error("Error closing connection:", err);
-      }
-    }
   }
 }
 
 module.exports = {
   getConnection,
   executeQuery,
+  closeConnection,
 };
