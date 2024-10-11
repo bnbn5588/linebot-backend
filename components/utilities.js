@@ -1,22 +1,32 @@
 function checkDateInput(indate) {
-  const splited = indate.split("-");
-  if (splited.length < 1) {
+  // Check if input is valid (non-empty and non-null)
+  if (!indate) {
     return -1;
-  }
-  let date_pattern;
-  if (splited.length === 3) {
-    date_pattern = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/;
-  } else if (splited.length === 2) {
-    date_pattern = /^([0-9]{4})-([0-9]{2})$/;
-  } else if (splited.length === 1) {
-    date_pattern = /^([0-9]{4})$/;
   }
 
-  const z = indate.match(date_pattern);
-  if (z) {
-    return z.length - 1;
+  // Split the input date by '-'
+  const splited = indate.split("-");
+  // Determine expected format based on number of parts
+  let date_pattern;
+  if (splited.length === 3) {
+    // YYYY-MM-DD
+    date_pattern = /^\d{4}-\d{2}-\d{2}$/;
+  } else if (splited.length === 2) {
+    // YYYY-MM
+    date_pattern = /^\d{4}-\d{2}$/;
+  } else if (splited.length === 1) {
+    // YYYY
+    date_pattern = /^\d{4}$/;
   } else {
+    // Invalid number of parts
     return -1;
+  }
+
+  // Match input against pattern
+  if (date_pattern.test(indate)) {
+    return splited.length; // Return the number of valid components
+  } else {
+    return -1; // Invalid format
   }
 }
 
