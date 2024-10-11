@@ -9,7 +9,7 @@ const apiKeyMiddleware = require("../apiKeyMiddleware");
 module.exports = async (req, res) => {
   apiKeyMiddleware(req, res, async () => {
     // Get the userid and wallet_id from query parameters
-    const { userid, wallet_id } = req.query;
+    const { uname, wallet_id } = req.query;
 
     let connection;
     try {
@@ -18,7 +18,7 @@ module.exports = async (req, res) => {
 
       const sql_select_with_param =
         "select TO_CHAR(fulldate,'YYYY-MM'),sum(exvalue) from expense where UNAME = :uname and WALLET_ID = :wallet_id group by TO_CHAR(fulldate,'YYYY-MM') order by 1 asc";
-      const data_tuple = [userid, wallet_id];
+      const data_tuple = [uname, wallet_id];
 
       // Execute the SQL query
       const records = await executeQuery(

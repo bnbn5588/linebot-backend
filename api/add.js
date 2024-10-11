@@ -15,9 +15,9 @@ module.exports = async (req, res) => {
     }
 
     const { uname, wallet_id, exvalue, targetdate, detail } = req.body;
-
     // Validate required fields
     if (!uname || !wallet_id || !exvalue || !detail) {
+      console.log("Missing required fields:");
       return res.status(400).json({
         status: "error",
         message:
@@ -66,7 +66,6 @@ module.exports = async (req, res) => {
           data_tuple2
         );
 
-        
         // Success response
         res.status(200).json({
           status: "success",
