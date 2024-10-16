@@ -7,6 +7,7 @@ async function getWallets(connection, userid) {
     SELECT wallet_id, wallet_name, timezone
     FROM wallet
     WHERE uname = :uname
+    ORDER BY 1
   `;
   const params = [userid];
   const result = await executeQuery(connection, sqlQuery, params);
