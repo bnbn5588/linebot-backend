@@ -42,7 +42,53 @@ function getMRange(indate) {
   return mrange;
 }
 
+function helpCommand() {
+  const res_message = {
+    commands: [
+      {
+        name: "Add Transaction",
+        command: "{+,-}10000 [detail]",
+        description:
+          "Record an expense (use '-') or income (use '+'). The optional detail can be included for a description of the transaction.",
+      },
+      {
+        name: "Show Transactions",
+        command: "show {YYYY-[MM]-[DD]}",
+        description:
+          "List all transactions on a specified date. The month (MM) and day (DD) can be omitted for broader results (e.g., show for a year or month).",
+      },
+      {
+        name: "Sum Transactions",
+        command: "sum {YYYY-[MM]-[DD]}",
+        description:
+          "Calculate the sum of all expenses on a specified date. The month (MM) and day (DD) can be omitted to sum expenses for a year or a month.",
+      },
+      {
+        name: "Total Balance",
+        command: "sumall",
+        description:
+          "Calculate the overall balance by summing all expenses and income from the wallet's starting date to the present.",
+      },
+      {
+        name: "Monthly Total Balance",
+        command: "sumbymonth",
+        description:
+          "Calculate the total balance for each month by summing all expenses and income from the starting date until the present.",
+      },
+      {
+        name: "Daily Balance within Each Month",
+        command: "avgbymonth",
+        description:
+          "Display the average daily balance for each month, showing the total of expenses and income per day.",
+      },
+    ],
+  };
+
+  return res_message;
+}
+
 module.exports = {
   getMRange,
   checkDateInput,
+  helpCommand,
 };

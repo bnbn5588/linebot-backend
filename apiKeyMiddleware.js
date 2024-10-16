@@ -1,3 +1,5 @@
+require("dotenv").config();
+
 const API_KEY = process.env.API_KEY; // Store your API key in an environment variable
 
 const apiKeyMiddleware = (req, res, next) => {

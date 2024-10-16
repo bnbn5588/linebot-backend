@@ -1,6 +1,5 @@
 // db.js
 const oracledb = require("oracledb");
-require("dotenv").config();
 
 // Utility function for database connection
 async function getConnection() {
