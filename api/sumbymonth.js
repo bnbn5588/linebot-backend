@@ -27,7 +27,7 @@ module.exports = async (req, res) => {
         data_tuple
       );
 
-      if (records.rows[0][0] === null) {
+      if (records.rows.length == 0) {
         res.status(404).json({
           status: "error",
           message: `[${wallet_id}] No data found !!`,
