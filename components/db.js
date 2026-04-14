@@ -1,15 +1,32 @@
 // db.js
 const oracledb = require("oracledb");
 
-// Utility function for database connection
-async function getConnection() {
-  try {
-    const connection = await oracledb.getConnection({
+// Module-level pool — persists across warm Vercel invocations on the same container.
+// poolMin:1 / poolMax:1 is intentional: each serverless instance handles one request
+// at a time, so one connection is sufficient. The pool handles reconnection automatically
+// if the connection goes stale during an idle period.
+let pool;
+
+async function getPool() {
+  if (!pool) {
+    pool = await oracledb.createPool({
       user: process.env.DB_USER,
       password: process.env.DB_PASS,
       connectString: process.env.DSN_NAME,
+      poolMin: 1,        // keep 1 connection alive after first use
+      poolMax: 1,        // never need more than 1 (1 req at a time per instance)
+      poolIncrement: 0,  // don't grow beyond poolMax
+      poolTimeout: 60,   // close idle connections after 60s
     });
-    return connection;
+  }
+  return pool;
+}
+
+// Utility function for database connection
+async function getConnection() {
+  try {
+    const p = await getPool();
+    return p.getConnection();
   } catch (err) {
     console.error("Error establishing DB connection:", err);
     throw err;
