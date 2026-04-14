@@ -11,6 +11,13 @@ module.exports = async (req, res) => {
     // Get the uname and wallet_id from query parameters
     const { uname, wallet_id } = req.query;
 
+    if (!uname || !wallet_id) {
+      return res.status(400).json({
+        status: "error",
+        message: "Missing required parameters: 'uname' or 'wallet_id'.",
+      });
+    }
+
     let connection;
     try {
       // Establish a database connection

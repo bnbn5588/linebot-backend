@@ -24,6 +24,15 @@ module.exports = async (req, res) => {
       });
     }
 
+    // Parse wallet_id to a positive integer
+    const walletIdInt = parseInt(wallet_id, 10);
+    if (isNaN(walletIdInt) || walletIdInt < 1) {
+      return res.status(400).json({
+        status: "error",
+        message: "Field 'wallet_id' must be a positive integer.",
+      });
+    }
+
     let connection;
     try {
       // Establish a database connection
@@ -41,10 +50,10 @@ module.exports = async (req, res) => {
       const max_wallet_id = max_wallet_records.rows[0][0];
 
       // 2. Validate the provided wallet_id
-      if (wallet_id < 0 || wallet_id > max_wallet_id) {
+      if (walletIdInt > max_wallet_id) {
         return res
           .status(400)
-          .json({ message: "Please input a valid wallet_id." });
+          .json({ status: "error", message: "Please input a valid wallet_id." });
       }
 
       // 3. Check if the user is already using the selected wallet
@@ -58,15 +67,16 @@ module.exports = async (req, res) => {
 
       // Ensure current_wallet_records has data
       if (current_wallet_records.rows.length === 0) {
-        return res.status(404).json({ message: "User not found." });
+        return res.status(404).json({ status: "error", message: "User not found." });
       }
 
       const current_wallet_id = current_wallet_records.rows[0][0];
       const current_wallet_name = current_wallet_records.rows[0][1];
       const current_wallet_tz = current_wallet_records.rows[0][2];
 
-      if (wallet_id == current_wallet_id) {
+      if (walletIdInt === current_wallet_id) {
         return res.status(200).json({
+          status: "success",
           message: `You are already using [${current_wallet_id}] ${current_wallet_name}`,
         });
       }
@@ -74,7 +84,7 @@ module.exports = async (req, res) => {
       // 4. Update the user's current wallet in the database
       const sql_update_wallet =
         "UPDATE USERS SET wallet_id = :wallet_id WHERE uname = :uname";
-      await executeQuery(connection, sql_update_wallet, { wallet_id, uname });
+      await executeQuery(connection, sql_update_wallet, { wallet_id: walletIdInt, uname });
 
       // 5. Fetch the updated wallet's name and timezone
       const sql_select_new_wallet =
@@ -84,7 +94,7 @@ module.exports = async (req, res) => {
         sql_select_new_wallet,
         {
           uname,
-          wallet_id,
+          wallet_id: walletIdInt,
         }
       );
 
@@ -111,7 +121,7 @@ module.exports = async (req, res) => {
     } catch (error) {
       console.error("Error in changing wallet:", error);
       res.status(500).json({
-        error: error.error,
+        status: "error",
         message: "An error occurred while changing the wallet.",
       });
     } finally {
