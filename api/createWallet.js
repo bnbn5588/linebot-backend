@@ -107,8 +107,8 @@ module.exports = async (req, res) => {
     } catch (error) {
       console.error("Error in changing wallet:", error);
       res.status(500).json({
-        error: error.error,
-        message: "An error occurred while changing the wallet.",
+        status: "error",
+        message: "An error occurred while creating the wallet.",
       });
     } finally {
       // Ensure the connection is closed

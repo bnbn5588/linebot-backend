@@ -11,6 +11,21 @@ module.exports = async (req, res) => {
     // Get the userid and wallet_id from query parameters
     const { uname, wallet_id, month } = req.query;
 
+    if (!uname || !wallet_id) {
+      return res.status(400).json({
+        status: "error",
+        message: "Missing required parameters: 'uname' or 'wallet_id'.",
+      });
+    }
+
+    // Validate optional month parameter format: YYYY-MM
+    if (month !== undefined && !/^\d{4}-\d{2}$/.test(month)) {
+      return res.status(400).json({
+        status: "error",
+        message: "Parameter 'month' must be in 'YYYY-MM' format.",
+      });
+    }
+
     let connection;
     try {
       // Establish a database connection

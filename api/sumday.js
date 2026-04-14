@@ -12,6 +12,13 @@ module.exports = async (req, res) => {
     // Get the userid and wallet_id from query parameters
     const { uname, wallet_id, date } = req.query;
 
+    if (!uname || !wallet_id) {
+      return res.status(400).json({
+        status: "error",
+        message: "Missing required parameters: 'uname' or 'wallet_id'.",
+      });
+    }
+
     const datefmt = checkDateInput(date);
     // If datefmt is less than 0, return an error message
     if (datefmt < 0) {

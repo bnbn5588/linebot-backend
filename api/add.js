@@ -25,6 +25,24 @@ module.exports = async (req, res) => {
       });
     }
 
+    // Validate exvalue is a non-zero number
+    const parsedValue = parseFloat(exvalue);
+    if (isNaN(parsedValue) || parsedValue === 0) {
+      return res.status(400).json({
+        status: "error",
+        message: "Field 'exvalue' must be a non-zero number.",
+      });
+    }
+
+    // Validate targetdate format: 'YYYY-MM-DD HH:MM:SS'
+    const datePattern = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+    if (!targetdate || !datePattern.test(targetdate)) {
+      return res.status(400).json({
+        status: "error",
+        message: "Field 'targetdate' must be in 'YYYY-MM-DD HH:MM:SS' format.",
+      });
+    }
+
     let connection;
     try {
       // Establish a database connection
@@ -83,7 +101,7 @@ module.exports = async (req, res) => {
     } catch (error) {
       console.error("Error in adding record:", error);
       res.status(500).json({
-        error: error.error,
+        status: "error",
         message: "An error occurred while adding record.",
       });
     } finally {
