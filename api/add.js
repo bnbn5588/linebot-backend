@@ -14,9 +14,13 @@ module.exports = async (req, res) => {
         .json({ error: "Method Not Allowed. Use POST instead." });
     }
 
-    const { uname, wallet_id, exvalue, targetdate, detail } = req.body;
+    const { uname, wallet_id, exvalue, targetdate, detail } = req.body || {};
+
+    // 'detail' is required — normalise to a trimmed string before checking
+    const note = typeof detail === "string" ? detail.trim() : "";
+
     // Validate required fields
-    if (!uname || !wallet_id || !exvalue || !detail) {
+    if (!uname || !wallet_id || !exvalue || !note) {
       console.log("Missing required fields:");
       return res.status(400).json({
         status: "error",
@@ -50,7 +54,7 @@ module.exports = async (req, res) => {
 
       const sql_insert_with_param =
         "INSERT INTO expense(UNAME,EXVALUE,FULLDATE,NOTE,WALLET_ID) VALUES (:uname,:exvalue,TO_DATE(:targetdate, 'YYYY-MM-DD HH24:MI:SS'),:note,:WALLET_ID)";
-      const dataInsert = [uname, exvalue, targetdate, detail, wallet_id];
+      const dataInsert = [uname, parsedValue, targetdate, note, wallet_id];
       const insertResult = await executeQuery(
         connection,
         sql_insert_with_param,
@@ -89,13 +93,19 @@ module.exports = async (req, res) => {
           status: "success",
           data: {
             wallet_id: wallet_id,
-            exvalue: exvalue,
-            detail: detail,
+            exvalue: parsedValue,
+            detail: note,
             targetdate: date,
             sum_day: records1.rows[0][1],
             targetmonth: records2.rows[0][0],
             sum_month: records2.rows[0][1],
           },
+        });
+      } else {
+        // insertResult.rowsAffected was 0 / undefined — never leave the request hanging
+        res.status(500).json({
+          status: "error",
+          message: "Failed to add record: no rows were inserted.",
         });
       }
     } catch (error) {

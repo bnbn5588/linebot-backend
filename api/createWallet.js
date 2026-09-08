@@ -51,7 +51,7 @@ module.exports = async (req, res) => {
 
       let newWalletId;
       if (max_wallet_records.rows[0][0] === null) {
-        // No wallet found, so start with wallet_id = 1
+        // No wallet found — wallet ids are 0-based, so the first one is id 0
         newWalletId = 0;
       } else {
         // If a wallet was found, increment the max wallet_id by 1

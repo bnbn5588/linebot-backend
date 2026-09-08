@@ -24,12 +24,13 @@ module.exports = async (req, res) => {
       });
     }
 
-    // Parse wallet_id to a positive integer
+    // Parse wallet_id to a non-negative integer.
+    // Wallet ids are 0-based (the first wallet a user creates is id 0), so 0 is valid.
     const walletIdInt = parseInt(wallet_id, 10);
-    if (isNaN(walletIdInt) || walletIdInt < 1) {
+    if (isNaN(walletIdInt) || walletIdInt < 0) {
       return res.status(400).json({
         status: "error",
-        message: "Field 'wallet_id' must be a positive integer.",
+        message: "Field 'wallet_id' must be a non-negative integer.",
       });
     }
 
