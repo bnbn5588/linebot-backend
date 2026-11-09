@@ -4,6 +4,7 @@ const {
   closeConnection,
 } = require("../components/db");
 const apiKeyMiddleware = require("../apiKeyMiddleware");
+const { parseAmount } = require("../components/utilities");
 
 module.exports = async (req, res) => {
   apiKeyMiddleware(req, res, async () => {
@@ -29,12 +30,14 @@ module.exports = async (req, res) => {
       });
     }
 
-    // Validate exvalue is a non-zero number
-    const parsedValue = parseFloat(exvalue);
-    if (isNaN(parsedValue) || parsedValue === 0) {
+    // Validate exvalue strictly. parseFloat() alone silently accepts junk:
+    // "-1,000" became -1 and "-120abc" became -120.
+    const parsedValue = parseAmount(exvalue);
+    if (parsedValue === null) {
       return res.status(400).json({
         status: "error",
-        message: "Field 'exvalue' must be a non-zero number.",
+        message:
+          "Field 'exvalue' must be a non-zero number with at most 2 decimals and below 10,000,000 (e.g. -120, +1,500.50).",
       });
     }
 

@@ -30,6 +30,29 @@ function checkDateInput(indate) {
   }
 }
 
+// Parse a transaction amount such as "-120", "+1,500.50" or 30000.
+// Commas are only accepted as proper thousands separators ("1,000", not "1,0").
+// Returns the number, or null if the input is not a valid non-zero amount that
+// fits EXPENSE.EXVALUE NUMBER(9,2).
+function parseAmount(input) {
+  if (typeof input === "number") {
+    input = String(input);
+  }
+  if (typeof input !== "string") {
+    return null;
+  }
+  const s = input.trim();
+  const pattern = /^[+-]?(\d{1,3}(,\d{3})+|\d+)(\.\d{1,2})?$/;
+  if (!pattern.test(s)) {
+    return null;
+  }
+  const value = Number(s.replace(/,/g, ""));
+  if (!Number.isFinite(value) || value === 0 || Math.abs(value) >= 1e7) {
+    return null;
+  }
+  return value;
+}
+
 function getMRange(indate) {
   const splited = indate.split("-");
   const nyear = parseInt(splited[0]);
@@ -44,42 +67,57 @@ function getMRange(indate) {
 
 function helpCommand() {
   const res_message = {
+    // Keep in sync with the commands handled by line-bot-fb (functions/index.js)
     commands: [
       {
         name: "Add Transaction",
-        command: "{+,-}10000 [detail]",
+        command: "{+,-}amount note [-d YYYY-MM-DD] [-h HH:mm]",
         description:
-          "Record an expense (use '-') or income (use '+'). The optional detail can be included for a description of the transaction.",
-      },
-      {
-        name: "Show Transactions",
-        command: "show {YYYY-[MM]-[DD]}",
-        description:
-          "List all transactions on a specified date. The month (MM) and day (DD) can be omitted for broader results (e.g., show for a year or month).",
-      },
-      {
-        name: "Sum Transactions",
-        command: "sum {YYYY-[MM]-[DD]}",
-        description:
-          "Calculate the sum of all expenses on a specified date. The month (MM) and day (DD) can be omitted to sum expenses for a year or a month.",
+          "Record an expense (use '-') or income (use '+') with a short note. Optionally set the date (-d) and/or time (-h). e.g. -120 lunch, +1,500 salary -d 2026-11-01",
       },
       {
         name: "Total Balance",
         command: "sumall",
         description:
-          "Calculate the overall balance by summing all expenses and income from the wallet's starting date to the present.",
+          "Overall balance (income + expenses) of the current wallet since its first transaction.",
       },
       {
         name: "Monthly Total Balance",
         command: "sumbymonth",
-        description:
-          "Calculate the total balance for each month by summing all expenses and income from the starting date until the present.",
+        description: "Balance (income + expenses) for each month.",
       },
       {
-        name: "Daily Balance within Each Month",
+        name: "Average Daily Balance",
         command: "avgbymonth",
+        description: "Average daily balance (income + expenses) for each month.",
+      },
+      {
+        name: "Group by Note",
+        command: "sumbynote [-m [YYYY-MM]]",
         description:
-          "Display the average daily balance for each month, showing the total of expenses and income per day.",
+          "Totals grouped by note, all-time. Add -m for this month, or -m YYYY-MM for a specific month.",
+      },
+      {
+        name: "List Wallets",
+        command: "wallet",
+        description: "List your wallets. * marks the current one.",
+      },
+      {
+        name: "Switch Wallet",
+        command: "wallet [id]",
+        description: "Switch the current wallet, e.g. wallet 1",
+      },
+      {
+        name: "Create Wallet",
+        command: "create [wallet_name] [timezone]",
+        description:
+          "Create a new wallet and make it current, e.g. create main Asia/Bangkok",
+      },
+      {
+        name: "Random Restaurant",
+        command: "(share your location)",
+        description:
+          "Share a location to get a random open restaurant within 1 km.",
       },
     ],
   };
@@ -88,6 +126,7 @@ function helpCommand() {
 }
 
 module.exports = {
+  parseAmount,
   getMRange,
   checkDateInput,
   helpCommand,
