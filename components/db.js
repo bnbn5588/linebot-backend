@@ -45,10 +45,13 @@ async function closeConnection(connection) {
 }
 
 // Utility function to execute queries
-async function executeQuery(connection, query, params) {
+// autoCommit defaults to true (each statement commits on its own). Pass
+// { autoCommit: false } for statements that must succeed or fail together,
+// then call connection.commit() / connection.rollback().
+async function executeQuery(connection, query, params, options = {}) {
   try {
     const result = await connection.execute(query, params, {
-      autoCommit: true, // Commit automatically after query execution
+      autoCommit: options.autoCommit !== false,
     });
     return result;
   } catch (err) {

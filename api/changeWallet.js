@@ -4,6 +4,7 @@ const {
   closeConnection,
 } = require("../components/db");
 const apiKeyMiddleware = require("../apiKeyMiddleware");
+const { isMissing } = require("../components/utilities");
 
 module.exports = async (req, res) => {
   apiKeyMiddleware(req, res, async () => {
@@ -17,7 +18,7 @@ module.exports = async (req, res) => {
     const { uname, wallet_id } = req.body || {};
 
     // Check if required fields are provided
-    if (!uname || !wallet_id) {
+    if (!uname || isMissing(wallet_id)) {
       return res.status(400).json({
         status: "error",
         message: "Missing required fields: 'uname' or 'wallet_id'.",

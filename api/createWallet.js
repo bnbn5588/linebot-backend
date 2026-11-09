@@ -15,7 +15,7 @@ module.exports = async (req, res) => {
         .json({ error: "Method Not Allowed. Use POST instead." });
     }
 
-    const { uname, wallet_name, timezone } = req.body;
+    const { uname, wallet_name, timezone } = req.body || {};
 
     // Validate required fields
     if (!uname || !wallet_name || !timezone) {
@@ -64,10 +64,13 @@ module.exports = async (req, res) => {
         VALUES (:uname, :wallet_id, :wallet_name, :timezone)
       `;
       const dataInsert = [uname, newWalletId, wallet_name, timezone];
+      // The INSERT and the MERGE below must succeed or fail together, otherwise
+      // a wallet can exist without being set as the user's current wallet.
       const insertResult = await executeQuery(
         connection,
         sqlInsertWallet,
-        dataInsert
+        dataInsert,
+        { autoCommit: false }
       );
 
       if (insertResult.rowsAffected > 0) {
@@ -83,7 +86,9 @@ module.exports = async (req, res) => {
               VALUES (s.uname, s.wallet_id)
         `;
         const dataUpsert = [uname, newWalletId];
-        await executeQuery(connection, sqlUpsertUser, dataUpsert);
+        await executeQuery(connection, sqlUpsertUser, dataUpsert, {
+          autoCommit: false,
+        });
 
         // Commit the transaction
         await connection.commit();
@@ -99,13 +104,21 @@ module.exports = async (req, res) => {
         });
       } else {
         // Insertion failed
+        await connection.rollback();
         res.status(500).json({
           status: "error",
           message: "Failed to create wallet.",
         });
       }
     } catch (error) {
-      console.error("Error in changing wallet:", error);
+      console.error("Error in creating wallet:", error);
+      if (connection) {
+        try {
+          await connection.rollback();
+        } catch (rollbackError) {
+          console.error("Rollback failed:", rollbackError);
+        }
+      }
       res.status(500).json({
         status: "error",
         message: "An error occurred while creating the wallet.",

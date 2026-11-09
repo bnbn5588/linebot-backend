@@ -53,6 +53,12 @@ function parseAmount(input) {
   return value;
 }
 
+// True when a required field was not provided. Unlike `!value`, the number 0
+// counts as provided — wallet ids are 0-based, so wallet_id 0 is valid.
+function isMissing(value) {
+  return value === undefined || value === null || String(value).trim() === "";
+}
+
 function getMRange(indate) {
   const splited = indate.split("-");
   const nyear = parseInt(splited[0]);
@@ -126,6 +132,7 @@ function helpCommand() {
 }
 
 module.exports = {
+  isMissing,
   parseAmount,
   getMRange,
   checkDateInput,

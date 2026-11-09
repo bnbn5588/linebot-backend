@@ -4,7 +4,7 @@ const {
   closeConnection,
 } = require("../components/db");
 const apiKeyMiddleware = require("../apiKeyMiddleware");
-const { parseAmount } = require("../components/utilities");
+const { parseAmount, isMissing } = require("../components/utilities");
 
 module.exports = async (req, res) => {
   apiKeyMiddleware(req, res, async () => {
@@ -21,7 +21,7 @@ module.exports = async (req, res) => {
     const note = typeof detail === "string" ? detail.trim() : "";
 
     // Validate required fields
-    if (!uname || !wallet_id || !exvalue || !note) {
+    if (!uname || isMissing(wallet_id) || isMissing(exvalue) || !note) {
       console.log("Missing required fields:");
       return res.status(400).json({
         status: "error",
