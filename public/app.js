@@ -199,6 +199,28 @@
     $("status").hidden = true;
     $("view").hidden = false;
     await loadAll();
+    await openFromLink();
+  }
+
+  // The chat card's "แก้ไข" button opens .../?edit=<record id>
+  async function openFromLink() {
+    const id = new URLSearchParams(location.search).get("edit");
+    if (!id || !/^\d{1,15}$/.test(id)) return;
+    try {
+      const data = await api("me-transactions?" + q({ wallet_id: state.wallet.wallet_id, id }));
+      if (data.transactions.length) openEditor(data.transactions[0]);
+      else showToast("ไม่พบรายการนี้แล้ว (อาจถูกลบหรืออยู่คนละกระเป๋า)");
+    } catch (e) {
+      if (!(e instanceof AuthError)) showToast("เปิดรายการไม่สำเร็จ");
+    }
+    try { history.replaceState(null, "", location.pathname); } catch { /* ignore */ }
+  }
+
+  function showToast(msg) {
+    const t = el("div", "toast", msg);
+    t.setAttribute("role", "status");
+    document.body.append(t);
+    setTimeout(() => t.remove(), 3500);
   }
 
   async function loadAll() {

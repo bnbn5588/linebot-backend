@@ -184,3 +184,6 @@ select, input {
 .form-error { color: var(--danger); font-size: 13px; margin: 0 0 8px; }
 .actions { display: flex; gap: 8px; align-items: center; }
 .spacer { flex: 1; }
+
+.toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 10; max-width: calc(100% - 32px);
+  background: var(--text-primary); color: var(--bg); padding: 10px 14px; border-radius: 10px; font-size: 14px; box-shadow: 0 4px 16px rgb(0 0 0 / 0.2); }

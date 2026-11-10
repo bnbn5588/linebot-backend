@@ -24,7 +24,7 @@ function badRequest(res, message) {
 }
 
 async function list(req, res, connection, uname) {
-  const { wallet_id, month, q, type, category } = req.query;
+  const { wallet_id, month, q, type, category, id } = req.query;
   const typeSql = typeCondition(type);
   if (typeSql === null) {
     return badRequest(res, "Parameter 'type' must be 'income', 'expense' or 'all'.");
@@ -46,6 +46,13 @@ async function list(req, res, connection, uname) {
     filters +=
       " AND fulldate >= TO_DATE(:month, 'YYYY-MM') AND fulldate < ADD_MONTHS(TO_DATE(:month, 'YYYY-MM'), 1)";
     binds.month = month;
+  }
+  if (id !== undefined && id !== "") {
+    if (!/^\d{1,15}$/.test(id)) {
+      return badRequest(res, "Parameter 'id' must be a number.");
+    }
+    filters += " AND trans_id = :id";
+    binds.id = Number(id);
   }
   if (category) {
     if (!CATEGORY_KEYS.has(category)) {
