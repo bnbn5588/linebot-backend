@@ -18,6 +18,7 @@ const routes = new Map([
   ["deleteRecord", require("../handlers/record").deleteRecord],
   ["help", require("../handlers/help")],
   ["me", require("../handlers/me")],
+  ["me-memory", require("../handlers/me-memory")],
   ["me-summary", require("../handlers/me-summary")],
   ["me-transactions", require("../handlers/me-transactions")],
   ["ping", require("../handlers/ping")],

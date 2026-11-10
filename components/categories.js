@@ -82,6 +82,11 @@ function noteKey(note) {
     .slice(0, 200);
 }
 
+// The same normalisation as noteKey(), in SQL, for matching EXPENSE.NOTE
+// against CATEGORY_MEMORY.NOTE_KEY.
+const NOTE_KEY_SQL =
+  "SUBSTR(TRIM(REGEXP_REPLACE(REGEXP_REPLACE(LOWER(note), '#[^[:space:]]+', ' '), '[[:space:]]+', ' ')), 1, 200)";
+
 function isValidFor(key, amount) {
   const c = BY_KEY.get(key);
   return !!c && c.kind === kindOf(amount);
@@ -212,6 +217,25 @@ async function remember(connection, uname, note, category) {
   );
 }
 
+// After a record is deleted: forget the note's category if no other record
+// of this user still has the same note. Returns true if something was forgotten.
+async function forgetIfUnused(connection, uname, note) {
+  const key = noteKey(note);
+  if (!key) return false;
+  const still = await executeQuery(
+    connection,
+    `SELECT 1 FROM expense WHERE uname = :uname AND ${NOTE_KEY_SQL} = :note_key FETCH FIRST 1 ROWS ONLY`,
+    { uname, note_key: key }
+  );
+  if (still.rows.length) return false;
+  const r = await executeQuery(
+    connection,
+    "DELETE FROM category_memory WHERE uname = :uname AND note_key = :note_key",
+    { uname, note_key: key }
+  );
+  return r.rowsAffected > 0;
+}
+
 // What the API returns for a category key (null-safe for old records).
 function describe(key, amount) {
   const c = BY_KEY.get(key) || BY_KEY.get(fallbackFor(amount));
@@ -224,6 +248,8 @@ function publicList() {
 }
 
 module.exports = {
+  NOTE_KEY_SQL,
+  forgetIfUnused,
   CATEGORIES,
   categorize,
   remember,

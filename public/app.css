@@ -145,6 +145,19 @@ select, input {
 .chip-row { margin: 0 0 8px; }
 .chip { font: inherit; font-size: 13px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-primary); border-radius: 999px; padding: 6px 12px; min-height: 32px; cursor: pointer; }
 .field select { width: 100%; font-size: 16px; }
+.memory summary { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; cursor: pointer; list-style: none; }
+.memory summary::-webkit-details-marker { display: none; }
+.memory summary h2::before { content: "▸ "; color: var(--text-muted); }
+.memory[open] summary h2::before { content: "▾ "; }
+.memory-help { margin: 8px 0; }
+.mem { list-style: none; margin: 0; padding: 0; }
+.mem li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.mem li:last-child { border-bottom: 0; }
+.mem .k { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mem .k small { color: var(--text-muted); margin-left: 6px; }
+.mem .ctl { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.mem select { width: 100%; min-height: 40px; }
+.mem .del { min-height: 40px; padding: 6px 12px; }
 .search { display: block; margin-bottom: 4px; }
 .search input { width: 100%; }
 .tx li button {

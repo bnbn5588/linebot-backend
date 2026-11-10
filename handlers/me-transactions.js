@@ -6,7 +6,7 @@ const {
 const { resolveWallet } = require("../components/services");
 const { lineAuth } = require("../components/lineAuth");
 const { parseAmount, isValidDateTime, typeCondition } = require("../components/utilities");
-const { categorize, remember, describe, isValidFor, CATEGORIES } = require("../components/categories");
+const { categorize, remember, describe, isValidFor, forgetIfUnused, CATEGORIES } = require("../components/categories");
 const CATEGORY_KEYS = new Set(CATEGORIES.map((c) => c.key));
 
 // /api/me-transactions — the signed-in user's records.
@@ -170,6 +170,14 @@ async function remove(req, res, connection, uname) {
   if (!/^\d{1,15}$/.test(String(id ?? ""))) {
     return badRequest(res, "Parameter 'id' is required.");
   }
+  const found = await executeQuery(
+    connection,
+    "SELECT note FROM expense WHERE trans_id = :id AND uname = :uname",
+    { id: Number(id), uname }
+  );
+  if (!found.rows.length) {
+    return res.status(404).json({ status: "error", message: "Record not found" });
+  }
   const result = await executeQuery(
     connection,
     "DELETE FROM expense WHERE trans_id = :id AND uname = :uname",
@@ -178,7 +186,8 @@ async function remove(req, res, connection, uname) {
   if (!result.rowsAffected) {
     return res.status(404).json({ status: "error", message: "Record not found" });
   }
-  return res.status(200).json({ status: "success", data: { id: Number(id) } });
+  const forgot = await forgetIfUnused(connection, uname, found.rows[0][0]);
+  return res.status(200).json({ status: "success", data: { id: Number(id), memory_forgotten: forgot } });
 }
 
 const methods = { GET: list, PUT: update, DELETE: remove };

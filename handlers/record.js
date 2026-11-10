@@ -4,7 +4,7 @@ const {
   closeConnection,
 } = require("../components/db");
 const apiKeyMiddleware = require("../apiKeyMiddleware");
-const { remember, describe, isValidFor } = require("../components/categories");
+const { remember, describe, isValidFor, forgetIfUnused } = require("../components/categories");
 const { isTextWithin } = require("../components/utilities");
 
 // Bot actions on a single record, triggered by buttons on the chat card.
@@ -71,9 +71,10 @@ function handler(action) {
           "DELETE FROM expense WHERE trans_id = :id AND uname = :uname",
           { id: rec.id, uname }
         );
+        const forgot = await forgetIfUnused(connection, uname, rec.note);
         return res.status(200).json({
           status: "success",
-          data: { id: rec.id, exvalue: rec.exvalue, note: rec.note, datetime: rec.datetime, category: describe(rec.category, rec.exvalue) },
+          data: { id: rec.id, exvalue: rec.exvalue, note: rec.note, datetime: rec.datetime, category: describe(rec.category, rec.exvalue), memory_forgotten: forgot },
         });
       } catch (error) {
         console.error(`Error in /${action}:`, error.message);

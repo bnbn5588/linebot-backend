@@ -426,6 +426,65 @@
     run(() => loadTx(true));
   }
 
+  // ---------- remembered categories
+  async function loadMemory() {
+    const list = $("memoryList");
+    let items;
+    try {
+      items = await api("me-memory");
+    } catch (e) {
+      if (!(e instanceof AuthError)) list.replaceChildren(el("li", "empty", "โหลดไม่สำเร็จ"));
+      return;
+    }
+    $("memoryCount").textContent = items.length ? `${items.length} โน้ต` : "";
+    if (!items.length) {
+      list.replaceChildren(el("li", "empty", "ยังไม่มี — เลือกหมวดให้รายการไหนก็ได้ ระบบจะเริ่มจำ"));
+      return;
+    }
+    list.replaceChildren(...items.map((m) => {
+      const li = el("li");
+      const k = el("span", "k", m.note_key);
+      k.append(el("small", "", `${m.records} รายการ`));
+      const ctl = el("div", "ctl");
+      const sel = el("select");
+      sel.setAttribute("aria-label", `หมวดของ ${m.note_key}`);
+      for (const c of state.categories.filter((c) => c.kind === m.category.kind)) {
+        const o = el("option", "", `${c.icon} ${c.label}`);
+        o.value = c.key;
+        sel.append(o);
+      }
+      sel.value = m.category.key;
+      sel.addEventListener("change", async () => {
+        sel.disabled = true;
+        try {
+          await api("me-memory", { method: "PUT", body: { note_key: m.note_key, category: sel.value } });
+          showToast(/^other_/.test(sel.value) ? `ลืม "${m.note_key}" แล้ว` : `"${m.note_key}" → ${sel.options[sel.selectedIndex].text}`);
+          await loadMemory();
+        } catch (e) {
+          if (!(e instanceof AuthError)) showToast("บันทึกไม่สำเร็จ: " + e.message);
+          sel.disabled = false;
+        }
+      });
+      const del = el("button", "btn del", "ลืม");
+      del.type = "button";
+      del.setAttribute("aria-label", `ลืมหมวดของ ${m.note_key}`);
+      del.addEventListener("click", async () => {
+        if (!window.confirm(`ให้ระบบลืมหมวดของ "${m.note_key}"?\nครั้งต่อไปจะเดาหมวดจากคำในโน้ตแทน`)) return;
+        del.disabled = true;
+        try {
+          await api("me-memory?" + q({ note_key: m.note_key }), { method: "DELETE" });
+          await loadMemory();
+        } catch (e) {
+          if (!(e instanceof AuthError)) showToast("ลบไม่สำเร็จ: " + e.message);
+          del.disabled = false;
+        }
+      });
+      ctl.append(sel, del);
+      li.append(k, ctl);
+      return li;
+    }));
+  }
+
   // ---------- transactions
   async function loadTx(reset) {
     const seq = ++state.txSeq;
@@ -544,6 +603,7 @@
       await api("me-transactions", { method: "PUT", body });
       closeEditor();
       await loadAll();
+      if ($("memoryCard").open) await loadMemory();
     } catch (e) {
       if (!(e instanceof AuthError)) setFormError(e.message);
       setBusy(false);
@@ -559,6 +619,7 @@
       await api("me-transactions?" + q({ id: t.id }), { method: "DELETE" });
       closeEditor();
       await loadAll();
+      if ($("memoryCard").open) await loadMemory();
     } catch (e) {
       if (!(e instanceof AuthError)) setFormError(e.message);
       setBusy(false);
@@ -626,6 +687,7 @@
     }, 300);
   });
   $("catChip").addEventListener("click", () => setCategoryFilter(null));
+  $("memoryCard").addEventListener("toggle", () => { if ($("memoryCard").open) run(loadMemory); });
   $("more").addEventListener("click", () => run(() => loadTx(false)));
   $("editForm").addEventListener("submit", save);
   $("btnCancel").addEventListener("click", closeEditor);
