@@ -63,6 +63,7 @@ x-api-key: <API_KEY>
 | `POST` | `/api/changeWallet` | body: `uname`, `wallet_id` | Switch the current wallet |
 | `GET` | `/api/help` | – | Command list shown by the bot's `help` |
 | `GET` | `/api/ping` | – | Keep-warm check: runs `SELECT 1 FROM DUAL`, returns `db_ms` |
+| `GET` | `/api/admin-overview` | – | Admin site data (LINE ID token of an admin, see [Admin website](#admin-website)) |
 
 Unknown routes return 404, a missing or wrong key returns 403.
 
@@ -123,6 +124,23 @@ On Vercel these are set in Project Settings → Environment Variables.
 The **Preview** environment points at the development schema (`DEVUSER`),
 so preview deployments never touch production data. Locally, `.env.dev` holds
 the development schema credentials (excluded via `.git/info/exclude`).
+
+## Admin website
+
+A separate site in `admin/` (its own Vercel project, root directory `admin`, no
+build step) for the owner: users and activity (counts and dates only, no
+amounts), records per day, DB size per table/index and schema quota, runtime
+health, LINE OA message quota and followers (needs `LB_KEY`, the bot's channel
+access token, in the backend's Vercel env), and links to the Vercel, Firebase,
+Google Cloud, OCI and LINE consoles.
+
+- API: `GET /api/admin-overview` — LINE ID token of an admin. Admins are listed
+  in `DEFAULT_ADMIN_USER_IDS` (`components/adminAuth.js`) or the `ADMIN_USER_IDS`
+  env var; a signed-in non-admin sees their own LINE userId so it can be added.
+- CORS: only origins in `DEFAULT_ADMIN_ORIGINS` (`handlers/admin-overview.js`) or
+  `ADMIN_ORIGINS` may call it.
+- Login: a second LIFF app in the same LINE Login channel, endpoint = the admin
+  site URL; its LIFF ID goes in `admin/config.js`.
 
 ## Requirements
 

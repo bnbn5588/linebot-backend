@@ -96,7 +96,7 @@
   class AuthError extends Error {}
 
   function reauth() {
-    if (session.get("reauth")) {
+    if (!window.liff || !liff.login || session.get("reauth")) {
       showStatus("เข้าสู่ระบบด้วย LINE ไม่สำเร็จ ลองปิดหน้านี้แล้วเปิดใหม่", true);
       return;
     }

@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Expense Bot Admin</title>
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <main class="app">
+    <div class="status" id="status">กำลังโหลด…</div>
+
+    <section id="view" hidden>
+      <header class="topbar">
+        <div class="brand">
+          <img id="botPic" class="avatar" alt="" hidden>
+          <div>
+            <h1 id="botName">Expense Bot Admin</h1>
+            <div class="muted" id="updated"></div>
+          </div>
+        </div>
+        <div class="top-actions">
+          <span class="muted" id="who"></span>
+          <button class="btn" id="refresh">รีเฟรช</button>
+        </div>
+      </header>
+
+      <section class="tiles" aria-label="ภาพรวม">
+        <div class="tile"><div class="tile-label">ผู้ใช้ทั้งหมด</div><div class="tile-value" id="kUsers">–</div><div class="tile-sub" id="kWallets"></div></div>
+        <div class="tile"><div class="tile-label">ใช้งาน 7 วัน</div><div class="tile-value" id="kActive7">–</div><div class="tile-sub" id="kActive30"></div></div>
+        <div class="tile"><div class="tile-label">รายการทั้งหมด</div><div class="tile-value" id="kRecords">–</div><div class="tile-sub" id="kRecords30"></div></div>
+        <div class="tile"><div class="tile-label">พื้นที่ DB ที่ใช้</div><div class="tile-value" id="kDb">–</div><div class="tile-sub" id="kDbQuota"></div></div>
+      </section>
+
+      <div class="grid">
+        <section class="card span2">
+          <div class="card-head"><h2>รายการต่อวัน (60 วัน)</h2><span class="muted">นับตามวันที่ของรายการ</span></div>
+          <div class="chart" id="chart"></div>
+          <div class="tooltip" id="tooltip" role="status" hidden></div>
+          <details class="table-view">
+            <summary>ดูเป็นตาราง (รายเดือน)</summary>
+            <table class="t"><thead><tr><th>เดือน</th><th>รายการ</th><th>ผู้ใช้</th></tr></thead><tbody id="monthTable"></tbody></table>
+          </details>
+        </section>
+
+        <section class="card span2">
+          <div class="card-head"><h2>ผู้ใช้</h2><span class="muted">จำนวนและเวลาใช้งานเท่านั้น ไม่แสดงยอดเงิน</span></div>
+          <div class="scroll">
+            <table class="t users">
+              <thead><tr><th>ผู้ใช้</th><th>กระเป๋า</th><th>รายการ</th><th>30 วัน</th><th>เริ่มใช้</th><th>รายการล่าสุด</th></tr></thead>
+              <tbody id="userTable"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head"><h2>ฐานข้อมูล</h2><span class="muted" id="dbVersion"></span></div>
+          <div class="meter" id="dbMeter"></div>
+          <table class="t compact">
+            <thead><tr><th>Segment</th><th>ประเภท</th><th>ขนาด</th></tr></thead>
+            <tbody id="segTable"></tbody>
+          </table>
+          <table class="t compact">
+            <thead><tr><th>ตาราง</th><th>แถว (stats)</th><th>วิเคราะห์ล่าสุด</th></tr></thead>
+            <tbody id="tableTable"></tbody>
+          </table>
+        </section>
+
+        <section class="card">
+          <div class="card-head"><h2>ระบบ</h2></div>
+          <dl class="kv" id="runtime"></dl>
+          <div class="card-head sub"><h2>LINE OA</h2></div>
+          <dl class="kv" id="line"></dl>
+        </section>
+
+        <section class="card span2">
+          <div class="card-head"><h2>โควต้าและค่าใช้จ่ายภายนอก</h2></div>
+          <ul class="links">
+            <li><a href="https://vercel.com/dashboard/usage" target="_blank" rel="noopener">Vercel Usage</a><span class="muted">Function invocations, bandwidth (Hobby)</span></li>
+            <li><a href="https://console.firebase.google.com/project/linebot-63dfd/usage" target="_blank" rel="noopener">Firebase Usage</a><span class="muted">Cloud Functions invocations / compute</span></li>
+            <li><a href="https://console.cloud.google.com/apis/api/places-backend.googleapis.com/quotas?project=linebot-63dfd" target="_blank" rel="noopener">Google Places API quotas</a><span class="muted">Restaurant picker</span></li>
+            <li><a href="https://console.cloud.google.com/billing" target="_blank" rel="noopener">Google Cloud Billing</a><span class="muted">ค่าใช้จ่าย Firebase + Places</span></li>
+            <li><a href="https://cloud.oracle.com/db/adbs" target="_blank" rel="noopener">Oracle Autonomous DB</a><span class="muted">Storage / OCPU ของทั้ง DB</span></li>
+            <li><a href="https://manager.line.biz/" target="_blank" rel="noopener">LINE Official Account Manager</a><span class="muted">แพ็กเกจข้อความ, สถิติ</span></li>
+          </ul>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="config.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>

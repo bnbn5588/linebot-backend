@@ -11,6 +11,7 @@
 
 const routes = new Map([
   ["add", require("../handlers/add")],
+  ["admin-overview", require("../handlers/admin-overview")],
   ["changeWallet", require("../handlers/changeWallet")],
   ["createWallet", require("../handlers/createWallet")],
   ["help", require("../handlers/help")],
