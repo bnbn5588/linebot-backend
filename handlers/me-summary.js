@@ -5,6 +5,7 @@ const {
 } = require("../components/db");
 const { resolveWallet } = require("../components/services");
 const { lineAuth } = require("../components/lineAuth");
+const { typeCondition } = require("../components/utilities");
 
 // GET /api/me-summary?wallet_id=&month=YYYY-MM
 // Dashboard data for one wallet of the signed-in user: overall totals, a row
@@ -15,7 +16,14 @@ module.exports = async (req, res) => {
     return res.status(405).json({ status: "error", message: "Use GET." });
   }
   return lineAuth(req, res, async (uname) => {
-    const { wallet_id, month } = req.query;
+    const { wallet_id, month, type } = req.query;
+    const typeSql = typeCondition(type);
+    if (typeSql === null) {
+      return res.status(400).json({
+        status: "error",
+        message: "Parameter 'type' must be 'income', 'expense' or 'all'.",
+      });
+    }
     if (month !== undefined && month !== "" && !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
       return res.status(400).json({
         status: "error",
@@ -66,7 +74,7 @@ module.exports = async (req, res) => {
         connection,
         `SELECT lower(note), sum(exvalue), count(*)
            FROM expense
-          WHERE uname = :uname AND wallet_id = :wallet_id ${monthFilter}
+          WHERE uname = :uname AND wallet_id = :wallet_id ${monthFilter}${typeSql}
           GROUP BY lower(note)
           ORDER BY 2`,
         month ? { ...binds, month } : binds
@@ -93,6 +101,7 @@ module.exports = async (req, res) => {
             count: r[4],
           })),
           month: month || null,
+          type: type || "all",
           by_note: notes.rows.map((r) => ({ note: r[0], total: r[1], count: r[2] })),
         },
       });

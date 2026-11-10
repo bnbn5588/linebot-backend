@@ -10,6 +10,13 @@
   const numFmt = new Intl.NumberFormat("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
   const compactFmt = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
 
+  // What the chart, by-note list and record list show: all | expense | income
+  const TYPES = {
+    all: { field: "balance", title: "คงเหลือรายเดือน", label: "คงเหลือ", empty: "ไม่มีรายการในเดือนนี้" },
+    expense: { field: "expense", title: "รายจ่ายรายเดือน", label: "รายจ่าย", empty: "ไม่มีรายจ่ายในเดือนนี้" },
+    income: { field: "income", title: "รายรับรายเดือน", label: "รายรับ", empty: "ไม่มีรายรับในเดือนนี้" },
+  };
+
   const state = {
     token: null,
     wallets: [],
@@ -22,6 +29,7 @@
     q: "",
     editing: null,
     txSeq: 0,
+    type: "all",
   };
 
   // ---------- helpers
@@ -182,6 +190,9 @@
     state.month = currentMonth(state.wallet.timezone);
     $("monthInput").value = state.month;
 
+    const savedType = store.get("type");
+    if (savedType && TYPES[savedType]) setType(savedType);
+
     $("status").hidden = true;
     $("view").hidden = false;
     await loadAll();
@@ -193,7 +204,7 @@
 
   // ---------- summary
   async function loadSummary() {
-    const data = await api("me-summary?" + q({ wallet_id: state.wallet.wallet_id, month: state.month }));
+    const data = await api("me-summary?" + q({ wallet_id: state.wallet.wallet_id, month: state.month, type: state.type }));
     state.summary = data;
     renderTiles();
     renderChart();
@@ -232,7 +243,8 @@
     const pad = { l: 40, r: 6, t: 18, b: 22 };
     const iw = W - pad.l - pad.r;
     const ih = H - pad.t - pad.b;
-    const vals = rows.map((r) => r.balance);
+    const T = TYPES[state.type];
+    const vals = rows.map((r) => r[T.field]);
     const step = niceStep((Math.max(0, ...vals) - Math.min(0, ...vals)) / 3 || 1);
     const lo = Math.floor(Math.min(0, ...vals) / step) * step;
     const hi = Math.ceil(Math.max(0, ...vals) / step) * step || step;
@@ -240,7 +252,7 @@
     const band = iw / rows.length;
     const bw = Math.min(26, band * 0.62);
 
-    const s = svg("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "กราฟคงเหลือรายเดือน 12 เดือน" });
+    const s = svg("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `กราฟ${T.title} 12 เดือน` });
 
     // grid + y labels on round values
     for (let v = lo; v <= hi + step / 2; v += step) {
@@ -255,7 +267,7 @@
     rows.forEach((r, i) => {
       const cx = pad.l + band * i + band / 2;
       const x = cx - bw / 2;
-      const v = r.balance;
+      const v = r[T.field];
       const selected = r.month === state.month;
       if (v !== 0) {
         const yv = y(v);
@@ -274,7 +286,7 @@
         s.append(at);
       }
 
-      const hit = svg("rect", { x: pad.l + band * i, y: pad.t, width: band, height: ih + pad.b, class: "hit", tabindex: "0", role: "button", "aria-label": `${monthLabel(r.month)} คงเหลือ ${money(v, true)}` });
+      const hit = svg("rect", { x: pad.l + band * i, y: pad.t, width: band, height: ih + pad.b, class: "hit", tabindex: "0", role: "button", "aria-label": `${monthLabel(r.month)} ${T.label} ${money(v, true)}` });
       hit.addEventListener("pointerenter", () => showTip(r, cx / W));
       hit.addEventListener("pointerleave", hideTip);
       hit.addEventListener("focus", () => showTip(r, cx / W));
@@ -285,7 +297,7 @@
     });
     box.replaceChildren(s);
     const cur = monthRow(state.month);
-    $("chartSel").textContent = `${monthLabel(state.month)}: ${money(cur.balance, true)}`;
+    $("chartSel").textContent = `${monthLabel(state.month)}: ${money(cur[T.field], state.type === "all")}`;
   }
 
   function niceStep(raw) {
@@ -330,7 +342,7 @@
     const list = $("notes");
     const notes = state.summary.by_note;
     if (!notes.length) {
-      list.replaceChildren(el("li", "empty", "ไม่มีรายการในเดือนนี้"));
+      list.replaceChildren(el("li", "empty", TYPES[state.type].empty));
       return;
     }
     const max = Math.max(...notes.map((n) => Math.abs(n.total))) || 1;
@@ -365,6 +377,7 @@
       wallet_id: state.wallet.wallet_id,
       month: searching ? "" : state.month,
       q: state.q.trim(),
+      type: state.type,
       limit: PAGE,
       offset: state.offset,
     }));
@@ -378,7 +391,7 @@
   function renderTx() {
     const list = $("txList");
     if (!state.tx.length) {
-      list.replaceChildren(el("li", "empty", state.q ? "ไม่พบรายการ" : "ไม่มีรายการในเดือนนี้"));
+      list.replaceChildren(el("li", "empty", state.q ? "ไม่พบรายการ" : TYPES[state.type].empty));
     } else {
       list.replaceChildren(...state.tx.map((t) => {
         const li = el("li");
@@ -464,6 +477,17 @@
     }
   }
 
+  // ---------- type filter
+  function setType(type) {
+    state.type = type;
+    const T = TYPES[type];
+    const radio = document.querySelector(`.filter input[value="${type}"]`);
+    if (radio) radio.checked = true;
+    $("chartTitle").textContent = T.title;
+    // two-colour legend only when positive and negative bars can both appear
+    $("chartLegend").hidden = type !== "all";
+  }
+
   // ---------- events
   async function selectMonth(ym) {
     if (!ym || ym === state.month) return;
@@ -481,6 +505,16 @@
       console.error(e);
       showStatus("เกิดข้อผิดพลาด: " + e.message, true);
     }
+  }
+
+  for (const r of document.querySelectorAll(".filter input[name=type]")) {
+    r.addEventListener("change", (e) => {
+      if (!e.target.checked || !TYPES[e.target.value]) return;
+      setType(e.target.value);
+      store.set("type", e.target.value);
+      hideTip();
+      run(loadAll);
+    });
   }
 
   $("walletSelect").addEventListener("change", (e) => {

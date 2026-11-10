@@ -82,6 +82,15 @@ function isTextWithin(value, maxBytes) {
   );
 }
 
+// Optional ?type= filter of the web app: "income" (exvalue > 0), "expense"
+// (exvalue < 0) or all. Returns the SQL condition, or null if the value is invalid.
+function typeCondition(type) {
+  if (type === undefined || type === "" || type === "all") return "";
+  if (type === "income") return " AND exvalue > 0";
+  if (type === "expense") return " AND exvalue < 0";
+  return null;
+}
+
 function getMRange(indate) {
   const splited = indate.split("-");
   const nyear = parseInt(splited[0]);
@@ -155,6 +164,7 @@ function helpCommand() {
 }
 
 module.exports = {
+  typeCondition,
   isValidDateTime,
   isTextWithin,
   isMissing,

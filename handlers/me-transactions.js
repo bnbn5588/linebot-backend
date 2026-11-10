@@ -5,7 +5,7 @@ const {
 } = require("../components/db");
 const { resolveWallet } = require("../components/services");
 const { lineAuth } = require("../components/lineAuth");
-const { parseAmount, isValidDateTime } = require("../components/utilities");
+const { parseAmount, isValidDateTime, typeCondition } = require("../components/utilities");
 
 // /api/me-transactions — the signed-in user's records.
 //   GET    ?wallet_id=&month=YYYY-MM&q=text&limit=50&offset=0   list (newest first)
@@ -21,7 +21,11 @@ function badRequest(res, message) {
 }
 
 async function list(req, res, connection, uname) {
-  const { wallet_id, month, q } = req.query;
+  const { wallet_id, month, q, type } = req.query;
+  const typeSql = typeCondition(type);
+  if (typeSql === null) {
+    return badRequest(res, "Parameter 'type' must be 'income', 'expense' or 'all'.");
+  }
   if (month && !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
     return badRequest(res, "Parameter 'month' must be in 'YYYY-MM' format.");
   }
@@ -34,7 +38,7 @@ async function list(req, res, connection, uname) {
   }
 
   const binds = { uname, wallet_id: wallet.wallet_id, offset, fetch: limit + 1 };
-  let filters = "";
+  let filters = typeSql;
   if (month) {
     filters +=
       " AND fulldate >= TO_DATE(:month, 'YYYY-MM') AND fulldate < ADD_MONTHS(TO_DATE(:month, 'YYYY-MM'), 1)";

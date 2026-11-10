@@ -48,10 +48,16 @@
         </div>
       </section>
 
+      <div class="filter" role="radiogroup" aria-label="แสดงรายการ">
+        <label><input type="radio" name="type" value="all" checked> ทั้งหมด</label>
+        <label><input type="radio" name="type" value="expense"> รายจ่าย</label>
+        <label><input type="radio" name="type" value="income"> รายรับ</label>
+      </div>
+
       <section class="card">
         <div class="card-head">
-          <h2>คงเหลือรายเดือน</h2>
-          <div class="legend" aria-hidden="true">
+          <h2 id="chartTitle">คงเหลือรายเดือน</h2>
+          <div class="legend" id="chartLegend" aria-hidden="true">
             <span><i class="swatch pos"></i>บวก</span>
             <span><i class="swatch neg"></i>ติดลบ</span>
           </div>
