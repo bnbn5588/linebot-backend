@@ -30,6 +30,8 @@ const routes = new Map([
 // The route comes from the rewrite (?route=<name>). Fall back to the last path
 // segment in case the request reaches this function without the rewrite.
 function routeName(req) {
+  // The rewrite's route wins; a client-supplied ?route= is ignored when it
+  // conflicts (Vercel then gives an array).
   if (typeof req.query?.route === "string" && req.query.route) {
     return req.query.route;
   }
@@ -38,6 +40,7 @@ function routeName(req) {
 }
 
 module.exports = async (req, res) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
   const handler = routes.get(routeName(req));
   if (!handler) {
     return res.status(404).json({
@@ -45,5 +48,30 @@ module.exports = async (req, res) => {
       message: "Not Found",
     });
   }
+
+  // Every parameter is a single string. Repeated keys (?a=1&a=2) or a[]= arrive
+  // as arrays/objects and would otherwise reach SQL binds and string methods.
+  for (const [key, value] of Object.entries(req.query || {})) {
+    if (key !== "route" && typeof value !== "string") {
+      return res.status(400).json({
+        status: "error",
+        message: `Parameter '${key}' must be given once.`,
+      });
+    }
+  }
+
+  // Vercel parses JSON bodies lazily and throws on malformed JSON.
+  if (req.method === "POST" || req.method === "PUT") {
+    let body;
+    try {
+      body = req.body;
+    } catch {
+      return res.status(400).json({ status: "error", message: "Invalid JSON body." });
+    }
+    if (body !== undefined && body !== null && body !== "" && (typeof body !== "object" || Array.isArray(body))) {
+      return res.status(400).json({ status: "error", message: "Body must be a JSON object." });
+    }
+  }
+
   return handler(req, res);
 };

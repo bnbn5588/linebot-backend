@@ -33,7 +33,7 @@ async function getWallet(connection, userid) {
 // used. Returns { wallet_id, wallet_name, timezone } or null.
 async function resolveWallet(connection, uname, walletIdParam) {
   if (walletIdParam !== undefined && walletIdParam !== "") {
-    if (!/^\d+$/.test(String(walletIdParam))) {
+    if (!/^\d{1,9}$/.test(String(walletIdParam))) {
       return null;
     }
     const result = await executeQuery(

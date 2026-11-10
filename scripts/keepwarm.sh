@@ -12,8 +12,10 @@ val() { sed -nE "s/^$1[[:space:]]*=[[:space:]]*\"?([^\"]*)\"?[[:space:]]*$/\1/p"
 API_URL=$(val API_URL)
 API_KEY=$(val API_KEY)
 
-out=$(curl -s -o /dev/null -m 30 -w '%{http_code} %{time_total}s' \
-  -H "x-api-key: ${API_KEY}" "${API_URL}/ping" 2>&1)
+# The key goes to curl on stdin (-H @-), not on the command line, so it never
+# shows up in the process list.
+out=$(printf 'x-api-key: %s\n' "$API_KEY" | curl -s -o /dev/null -m 30 -w '%{http_code} %{time_total}s' \
+  -H @- "${API_URL}/ping" 2>&1)
 echo "$(date -u +%FT%TZ) $out" >> "$LOG"
 
 # Keep the log small.

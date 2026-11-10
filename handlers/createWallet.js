@@ -5,6 +5,7 @@ const {
 } = require("../components/db");
 const apiKeyMiddleware = require("../apiKeyMiddleware");
 const moment = require("moment-timezone");
+const { isTextWithin } = require("../components/utilities");
 
 module.exports = async (req, res) => {
   apiKeyMiddleware(req, res, async () => {
@@ -23,6 +24,14 @@ module.exports = async (req, res) => {
         status: "error",
         message:
           "Missing required fields: 'uname', 'wallet_name', or 'timezone'.",
+      });
+    }
+
+    // Types and sizes must fit the WALLET columns (150 / 150 / 250 bytes)
+    if (!isTextWithin(uname, 150) || !isTextWithin(wallet_name, 150) || typeof timezone !== "string" || timezone.length > 250) {
+      return res.status(400).json({
+        status: "error",
+        message: "Invalid 'uname', 'wallet_name' (max 150 bytes) or 'timezone'.",
       });
     }
 

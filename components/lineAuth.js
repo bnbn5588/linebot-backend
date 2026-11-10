@@ -22,6 +22,21 @@ const DEFAULT_LOGIN_CHANNEL_ID = "";
 const cache = new Map();
 const CACHE_MAX = 500;
 
+// Cheap shape check before asking LINE, so junk tokens do not each cost an
+// outbound call. LINE still does the real verification (signature, aud, exp).
+function looksLikeIdToken(token, channelId) {
+  if (typeof token !== "string" || token.length > 4096) return false;
+  const parts = token.split(".");
+  if (parts.length !== 3 || !parts.every((p) => /^[A-Za-z0-9_-]+$/.test(p))) return false;
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
+    const now = Math.floor(Date.now() / 1000);
+    return payload.aud === channelId && typeof payload.sub === "string" && payload.exp > now;
+  } catch {
+    return false;
+  }
+}
+
 async function verifyIdToken(idToken) {
   const now = Math.floor(Date.now() / 1000);
   const hit = cache.get(idToken);
@@ -32,6 +47,9 @@ async function verifyIdToken(idToken) {
   const channelId = process.env.LINE_LOGIN_CHANNEL_ID || DEFAULT_LOGIN_CHANNEL_ID;
   if (!channelId) {
     throw new Error("LINE Login channel ID is not configured");
+  }
+  if (!looksLikeIdToken(idToken, channelId)) {
+    return null;
   }
 
   const response = await fetch(VERIFY_URL, {

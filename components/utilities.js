@@ -59,6 +59,29 @@ function isMissing(value) {
   return value === undefined || value === null || String(value).trim() === "";
 }
 
+// A real calendar date-time in 'YYYY-MM-DD HH:MM:SS' (rejects 2026-02-30, 24:00:00...)
+function isValidDateTime(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/.exec(typeof s === "string" ? s : "");
+  if (!m) return false;
+  const [y, mo, d, h, mi, se] = m.slice(1).map(Number);
+  const dt = new Date(Date.UTC(y, mo - 1, d, h, mi, se));
+  return (
+    dt.getUTCFullYear() === y &&
+    dt.getUTCMonth() === mo - 1 &&
+    dt.getUTCDate() === d &&
+    h < 24 && mi < 60 && se < 60
+  );
+}
+
+// A non-empty string that fits a VARCHAR2(n BYTE) column (Thai is 3 bytes/char).
+function isTextWithin(value, maxBytes) {
+  return (
+    typeof value === "string" &&
+    value.trim() !== "" &&
+    Buffer.byteLength(value, "utf8") <= maxBytes
+  );
+}
+
 function getMRange(indate) {
   const splited = indate.split("-");
   const nyear = parseInt(splited[0]);
@@ -132,6 +155,8 @@ function helpCommand() {
 }
 
 module.exports = {
+  isValidDateTime,
+  isTextWithin,
   isMissing,
   parseAmount,
   getMRange,

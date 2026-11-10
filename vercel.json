@@ -2,5 +2,28 @@
   "version": 2,
   "regions": ["hnd1"],
   "outputDirectory": "public",
-  "rewrites": [{ "source": "/api/:route", "destination": "/api/index?route=:route" }]
+  "rewrites": [{ "source": "/api/:route", "destination": "/api/index?route=:route" }],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "script-src 'self' https://static.line-scdn.net; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=()"
+        }
+      ]
+    }
+  ]
 }

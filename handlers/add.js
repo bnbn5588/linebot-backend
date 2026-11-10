@@ -4,7 +4,7 @@ const {
   closeConnection,
 } = require("../components/db");
 const apiKeyMiddleware = require("../apiKeyMiddleware");
-const { parseAmount, isMissing } = require("../components/utilities");
+const { parseAmount, isMissing, isValidDateTime, isTextWithin } = require("../components/utilities");
 
 module.exports = async (req, res) => {
   apiKeyMiddleware(req, res, async () => {
@@ -30,6 +30,14 @@ module.exports = async (req, res) => {
       });
     }
 
+    // Types and sizes must fit the EXPENSE columns (UNAME 150 bytes, NOTE 250 bytes)
+    if (!isTextWithin(uname, 150) || !/^\d{1,9}$/.test(String(wallet_id)) || !isTextWithin(note, 250)) {
+      return res.status(400).json({
+        status: "error",
+        message: "Invalid 'uname', 'wallet_id' or 'detail' (note is limited to 250 bytes).",
+      });
+    }
+
     // Validate exvalue strictly. parseFloat() alone silently accepts junk:
     // "-1,000" became -1 and "-120abc" became -120.
     const parsedValue = parseAmount(exvalue);
@@ -42,8 +50,7 @@ module.exports = async (req, res) => {
     }
 
     // Validate targetdate format: 'YYYY-MM-DD HH:MM:SS'
-    const datePattern = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
-    if (!targetdate || !datePattern.test(targetdate)) {
+    if (!isValidDateTime(targetdate)) {
       return res.status(400).json({
         status: "error",
         message: "Field 'targetdate' must be in 'YYYY-MM-DD HH:MM:SS' format.",

@@ -5,7 +5,7 @@ const {
 } = require("../components/db");
 const { resolveWallet } = require("../components/services");
 const { lineAuth } = require("../components/lineAuth");
-const { parseAmount } = require("../components/utilities");
+const { parseAmount, isValidDateTime } = require("../components/utilities");
 
 // /api/me-transactions — the signed-in user's records.
 //   GET    ?wallet_id=&month=YYYY-MM&q=text&limit=50&offset=0   list (newest first)
@@ -15,19 +15,6 @@ const { parseAmount } = require("../components/utilities");
 // can only see or change their own records.
 
 const NOTE_MAX_BYTES = 250; // EXPENSE.NOTE is VARCHAR2(250 BYTE); Thai is 3 bytes/char
-
-function isValidDateTime(s) {
-  const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/.exec(s || "");
-  if (!m) return false;
-  const [y, mo, d, h, mi, se] = m.slice(1).map(Number);
-  const dt = new Date(Date.UTC(y, mo - 1, d, h, mi, se));
-  return (
-    dt.getUTCFullYear() === y &&
-    dt.getUTCMonth() === mo - 1 &&
-    dt.getUTCDate() === d &&
-    h < 24 && mi < 60 && se < 60
-  );
-}
 
 function badRequest(res, message) {
   return res.status(400).json({ status: "error", message });
@@ -52,6 +39,9 @@ async function list(req, res, connection, uname) {
     filters +=
       " AND fulldate >= TO_DATE(:month, 'YYYY-MM') AND fulldate < ADD_MONTHS(TO_DATE(:month, 'YYYY-MM'), 1)";
     binds.month = month;
+  }
+  if (q && q.length > 100) {
+    return badRequest(res, "Parameter 'q' is too long.");
   }
   if (q && q.trim()) {
     // Escape LIKE wildcards so the search is a plain "contains"
@@ -84,7 +74,7 @@ async function list(req, res, connection, uname) {
 
 async function update(req, res, connection, uname) {
   const { id, exvalue, targetdate, detail } = req.body || {};
-  if (!/^\d+$/.test(String(id ?? ""))) {
+  if (!/^\d{1,15}$/.test(String(id ?? ""))) {
     return badRequest(res, "Field 'id' is required.");
   }
   const value = parseAmount(exvalue);
@@ -125,7 +115,7 @@ async function update(req, res, connection, uname) {
 
 async function remove(req, res, connection, uname) {
   const id = req.query.id;
-  if (!/^\d+$/.test(String(id ?? ""))) {
+  if (!/^\d{1,15}$/.test(String(id ?? ""))) {
     return badRequest(res, "Parameter 'id' is required.");
   }
   const result = await executeQuery(

@@ -4,7 +4,7 @@ const {
   closeConnection,
 } = require("../components/db");
 const apiKeyMiddleware = require("../apiKeyMiddleware");
-const { isMissing } = require("../components/utilities");
+const { isMissing, isTextWithin } = require("../components/utilities");
 
 module.exports = async (req, res) => {
   apiKeyMiddleware(req, res, async () => {
@@ -22,6 +22,13 @@ module.exports = async (req, res) => {
       return res.status(400).json({
         status: "error",
         message: "Missing required fields: 'uname' or 'wallet_id'.",
+      });
+    }
+
+    if (!isTextWithin(uname, 150) || !/^\d{1,9}$/.test(String(wallet_id))) {
+      return res.status(400).json({
+        status: "error",
+        message: "Invalid 'uname' or 'wallet_id'.",
       });
     }
 
