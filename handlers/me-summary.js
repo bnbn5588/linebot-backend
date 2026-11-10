@@ -6,6 +6,7 @@ const {
 const { resolveWallet } = require("../components/services");
 const { lineAuth } = require("../components/lineAuth");
 const { typeCondition } = require("../components/utilities");
+const { describe } = require("../components/categories");
 
 // GET /api/me-summary?wallet_id=&month=YYYY-MM
 // Dashboard data for one wallet of the signed-in user: overall totals, a row
@@ -80,6 +81,19 @@ module.exports = async (req, res) => {
         month ? { ...binds, month } : binds
       );
 
+      // Records saved before categories existed have CATEGORY = NULL: count
+      // them as "other" of their kind.
+      const cats = await executeQuery(
+        connection,
+        `SELECT NVL(category, CASE WHEN exvalue > 0 THEN 'other_income' ELSE 'other_expense' END) AS cat,
+                sum(exvalue), count(*), min(exvalue)
+           FROM expense
+          WHERE uname = :uname AND wallet_id = :wallet_id ${monthFilter}${typeSql}
+          GROUP BY NVL(category, CASE WHEN exvalue > 0 THEN 'other_income' ELSE 'other_expense' END)
+          ORDER BY 2`,
+        month ? { ...binds, month } : binds
+      );
+
       const t = totals.rows[0];
       res.status(200).json({
         status: "success",
@@ -103,6 +117,7 @@ module.exports = async (req, res) => {
           month: month || null,
           type: type || "all",
           by_note: notes.rows.map((r) => ({ note: r[0], total: r[1], count: r[2] })),
+          by_category: cats.rows.map((r) => ({ ...describe(r[0], r[3]), total: r[1], count: r[2] })),
         },
       });
     } catch (error) {

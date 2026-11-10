@@ -30,6 +30,8 @@
     editing: null,
     txSeq: 0,
     type: "all",
+    categories: [],
+    category: null,
   };
 
   // ---------- helpers
@@ -178,6 +180,7 @@
     session.del("reauth");
 
     state.wallets = me.wallets;
+    state.categories = me.categories || [];
     const saved = store.get("wallet_id");
     state.wallet = me.wallets.find((w) => String(w.wallet_id) === saved) || me.current_wallet;
     const sel = $("walletSelect");
@@ -210,6 +213,7 @@
     renderChart();
     renderMonthTable();
     renderNotes();
+    renderCategories();
   }
 
   function monthRow(ym) {
@@ -364,6 +368,42 @@
     list.replaceChildren(...items);
   }
 
+  // ---------- categories
+  function renderCategories() {
+    const list = $("cats");
+    $("catMonth").textContent = monthLabel(state.month);
+    const cats = state.summary.by_category || [];
+    if (!cats.length) {
+      list.replaceChildren(el("li", "empty", TYPES[state.type].empty));
+      return;
+    }
+    const max = Math.max(...cats.map((c) => Math.abs(c.total))) || 1;
+    list.replaceChildren(...cats.map((c) => {
+      const li = el("li", state.category && state.category.key === c.key ? "on" : "");
+      const b = el("button");
+      b.type = "button";
+      b.setAttribute("aria-pressed", state.category && state.category.key === c.key ? "true" : "false");
+      const v = el("span", "v", money(c.total, true));
+      v.append(el("span", "c", ` ×${c.count}`));
+      const track = el("div", "track");
+      const fill = el("div", "fill " + (c.total >= 0 ? "pos" : "neg"));
+      fill.style.width = Math.max((Math.abs(c.total) / max) * 100, 1.5) + "%";
+      track.append(fill);
+      b.append(el("span", "n", `${c.icon} ${c.label}`), v, track);
+      b.addEventListener("click", () => setCategoryFilter(state.category && state.category.key === c.key ? null : c));
+      li.append(b);
+      return li;
+    }));
+  }
+
+  function setCategoryFilter(c) {
+    state.category = c ? { key: c.key, label: c.label, icon: c.icon, kind: c.kind } : null;
+    $("catChipRow").hidden = !state.category;
+    if (state.category) $("catChip").textContent = `${state.category.icon} ${state.category.label}  ✕`;
+    if (state.summary) renderCategories();
+    run(() => loadTx(true));
+  }
+
   // ---------- transactions
   async function loadTx(reset) {
     const seq = ++state.txSeq;
@@ -378,6 +418,7 @@
       month: searching ? "" : state.month,
       q: state.q.trim(),
       type: state.type,
+      category: state.category ? state.category.key : "",
       limit: PAGE,
       offset: state.offset,
     }));
@@ -401,7 +442,7 @@
           el("span", "note", t.note || "-"),
           el("span", "amt", money(t.exvalue, true)),
           el("span", "when", whenLabel(t.datetime)),
-          el("span", "kind", t.exvalue >= 0 ? "รายรับ" : "รายจ่าย")
+          el("span", "kind", t.category ? `${t.category.icon} ${t.category.label}` : (t.exvalue >= 0 ? "รายรับ" : "รายจ่าย"))
         );
         b.addEventListener("click", () => openEditor(t));
         li.append(b);
@@ -421,10 +462,27 @@
     $("fDate").value = d;
     $("fTime").value = time;
     $("fNote").value = t.note || "";
+    fillCategorySelect(t.exvalue < 0 ? "expense" : "income", t.category ? t.category.key : null);
     setFormError("");
     setBusy(false);
     if (dlg.showModal) dlg.showModal(); else dlg.setAttribute("open", "");
   }
+  function fillCategorySelect(kind, selected) {
+    const sel = $("fCategory");
+    const options = state.categories.filter((c) => c.kind === kind);
+    sel.replaceChildren(...options.map((c) => {
+      const o = el("option", "", `${c.icon} ${c.label}`);
+      o.value = c.key;
+      return o;
+    }));
+    sel.value = options.some((c) => c.key === selected) ? selected : (kind === "income" ? "other_income" : "other_expense");
+  }
+  for (const r of dlg.querySelectorAll("input[name=sign]")) {
+    r.addEventListener("change", (e) => {
+      if (e.target.checked) fillCategorySelect(e.target.value === "-" ? "expense" : "income", $("fCategory").value);
+    });
+  }
+
   function closeEditor() {
     state.editing = null;
     if (dlg.close) dlg.close(); else dlg.removeAttribute("open");
@@ -451,6 +509,14 @@
       targetdate: `${$("fDate").value} ${time}`,
       detail: $("fNote").value,
     };
+    // Send the category only when the user changed it, so an untouched form
+    // does not overwrite what the user taught for this note.
+    const pickedCategory = $("fCategory").value;
+    const wasCategory = t.category && t.category.assigned ? t.category.key : null;
+    const signChanged = (sign === "-") !== (t.exvalue < 0);
+    if (pickedCategory && (pickedCategory !== wasCategory || signChanged) && !(wasCategory === null && !signChanged && /^other_/.test(pickedCategory))) {
+      body.category = pickedCategory;
+    }
     setBusy(true);
     try {
       await api("me-transactions", { method: "PUT", body });
@@ -512,6 +578,10 @@
       if (!e.target.checked || !TYPES[e.target.value]) return;
       setType(e.target.value);
       store.set("type", e.target.value);
+      if (state.category && state.type !== "all" && state.category.kind !== state.type) {
+        state.category = null;
+        $("catChipRow").hidden = true;
+      }
       hideTip();
       run(loadAll);
     });
@@ -533,6 +603,7 @@
       run(() => loadTx(true));
     }, 300);
   });
+  $("catChip").addEventListener("click", () => setCategoryFilter(null));
   $("more").addEventListener("click", () => run(() => loadTx(false)));
   $("editForm").addEventListener("submit", save);
   $("btnCancel").addEventListener("click", closeEditor);

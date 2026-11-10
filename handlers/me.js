@@ -1,6 +1,7 @@
 const { getConnection, closeConnection } = require("../components/db");
 const { getWallets, resolveWallet } = require("../components/services");
 const { lineAuth } = require("../components/lineAuth");
+const { publicList } = require("../components/categories");
 
 // GET /api/me — who is signed in, their current wallet and all their wallets.
 // Auth: LINE ID token (Authorization: Bearer ...), not API_KEY.
@@ -28,7 +29,7 @@ module.exports = async (req, res) => {
       }));
       res.status(200).json({
         status: "success",
-        data: { current_wallet: current, wallets },
+        data: { current_wallet: current, wallets, categories: publicList() },
       });
     } catch (error) {
       console.error("Error in /me:", error.message);

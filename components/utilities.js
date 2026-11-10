@@ -109,9 +109,9 @@ function helpCommand() {
     commands: [
       {
         name: "Add Transaction",
-        command: "{+,-}amount note [-d YYYY-MM-DD] [-h HH:mm]",
+        command: "{+,-}amount note [#category] [-d YYYY-MM-DD] [-h HH:mm]",
         description:
-          "Record an expense (use '-') or income (use '+') with a short note. Optionally set the date (-d) and/or time (-h). e.g. -120 lunch, +1,500 salary -d 2026-11-01",
+          "Record an expense (use '-') or income (use '+') with a short note. Optionally set the date (-d) and/or time (-h). The category is picked automatically; add #category to choose it (e.g. #อาหาร #เดินทาง). e.g. -120 lunch, -60 กาแฟ #เครื่องดื่ม, +1,500 salary -d 2026-11-01",
       },
       {
         name: "Total Balance",

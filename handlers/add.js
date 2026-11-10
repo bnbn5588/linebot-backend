@@ -4,6 +4,8 @@ const {
   closeConnection,
 } = require("../components/db");
 const apiKeyMiddleware = require("../apiKeyMiddleware");
+const oracledb = require("oracledb");
+const { categorize, describe } = require("../components/categories");
 const { parseAmount, isMissing, isValidDateTime, isTextWithin } = require("../components/utilities");
 
 module.exports = async (req, res) => {
@@ -62,9 +64,22 @@ module.exports = async (req, res) => {
       // Establish a database connection
       connection = await getConnection();
 
+      // Pick a category (#tag > remembered > keyword > other). A recognised
+      // #tag is removed from the stored note.
+      const cat = await categorize(connection, uname, note, parsedValue);
+      const storedNote = cat.note || note;
+
       const sql_insert_with_param =
-        "INSERT INTO expense(UNAME,EXVALUE,FULLDATE,NOTE,WALLET_ID) VALUES (:uname,:exvalue,TO_DATE(:targetdate, 'YYYY-MM-DD HH24:MI:SS'),:note,:WALLET_ID)";
-      const dataInsert = [uname, parsedValue, targetdate, note, wallet_id];
+        "INSERT INTO expense(UNAME,EXVALUE,FULLDATE,NOTE,WALLET_ID,CATEGORY) VALUES (:uname,:exvalue,TO_DATE(:targetdate, 'YYYY-MM-DD HH24:MI:SS'),:note,:wallet_id,:category) RETURNING trans_id INTO :id";
+      const dataInsert = {
+        uname,
+        exvalue: parsedValue,
+        targetdate,
+        note: storedNote,
+        wallet_id,
+        category: cat.category,
+        id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+      };
       const insertResult = await executeQuery(
         connection,
         sql_insert_with_param,
@@ -102,9 +117,11 @@ module.exports = async (req, res) => {
         res.status(200).json({
           status: "success",
           data: {
+            id: insertResult.outBinds.id[0],
             wallet_id: wallet_id,
             exvalue: parsedValue,
-            detail: note,
+            detail: storedNote,
+            category: { ...describe(cat.category, parsedValue), source: cat.source },
             targetdate: date,
             sum_day: records1.rows[0][1],
             targetmonth: records2.rows[0][0],

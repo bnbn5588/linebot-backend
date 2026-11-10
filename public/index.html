@@ -75,12 +75,20 @@
       </section>
 
       <section class="card">
+        <div class="card-head"><h2>แยกตามหมวด</h2><span class="muted" id="catMonth"></span></div>
+        <ul class="notes cats" id="cats"></ul>
+      </section>
+
+      <section class="card">
         <div class="card-head"><h2>แยกตามโน้ต</h2><span class="muted" id="noteMonth"></span></div>
         <ul class="notes" id="notes"></ul>
       </section>
 
       <section class="card">
         <div class="card-head"><h2>รายการ</h2><span class="muted" id="txMonth"></span></div>
+        <div class="chip-row" id="catChipRow" hidden>
+          <button type="button" class="chip" id="catChip" aria-label="ล้างตัวกรองหมวด"></button>
+        </div>
         <label class="search">
           <span class="sr-only">ค้นหาโน้ต</span>
           <input type="search" id="search" placeholder="ค้นหาโน้ต" autocomplete="off">
@@ -107,6 +115,9 @@
       </div>
       <label class="field">โน้ต
         <input id="fNote" maxlength="250" autocomplete="off" required>
+      </label>
+      <label class="field">หมวด
+        <select id="fCategory"></select>
       </label>
       <p class="form-error" id="formError" role="alert" hidden></p>
       <div class="actions">

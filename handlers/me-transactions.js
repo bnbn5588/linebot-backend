@@ -6,10 +6,13 @@ const {
 const { resolveWallet } = require("../components/services");
 const { lineAuth } = require("../components/lineAuth");
 const { parseAmount, isValidDateTime, typeCondition } = require("../components/utilities");
+const { categorize, remember, describe, isValidFor, CATEGORIES } = require("../components/categories");
+const CATEGORY_KEYS = new Set(CATEGORIES.map((c) => c.key));
 
 // /api/me-transactions — the signed-in user's records.
 //   GET    ?wallet_id=&month=YYYY-MM&q=text&limit=50&offset=0   list (newest first)
-//   PUT    body { id, exvalue, targetdate: "YYYY-MM-DD HH:MM:SS", detail }   edit
+//          &type=income|expense&category=<key>
+//   PUT    body { id, exvalue, targetdate: "YYYY-MM-DD HH:MM:SS", detail, category? }   edit
 //   DELETE ?id=   delete
 // Every statement is scoped by uname from the verified LINE token, so a user
 // can only see or change their own records.
@@ -21,7 +24,7 @@ function badRequest(res, message) {
 }
 
 async function list(req, res, connection, uname) {
-  const { wallet_id, month, q, type } = req.query;
+  const { wallet_id, month, q, type, category } = req.query;
   const typeSql = typeCondition(type);
   if (typeSql === null) {
     return badRequest(res, "Parameter 'type' must be 'income', 'expense' or 'all'.");
@@ -44,6 +47,16 @@ async function list(req, res, connection, uname) {
       " AND fulldate >= TO_DATE(:month, 'YYYY-MM') AND fulldate < ADD_MONTHS(TO_DATE(:month, 'YYYY-MM'), 1)";
     binds.month = month;
   }
+  if (category) {
+    if (!CATEGORY_KEYS.has(category)) {
+      return badRequest(res, "Unknown 'category'.");
+    }
+    // Old records have no category yet; they count as "other"
+    filters += category === "other_expense" || category === "other_income"
+      ? " AND (category = :category OR category IS NULL)"
+      : " AND category = :category";
+    binds.category = category;
+  }
   if (q && q.length > 100) {
     return badRequest(res, "Parameter 'q' is too long.");
   }
@@ -56,7 +69,7 @@ async function list(req, res, connection, uname) {
 
   const result = await executeQuery(
     connection,
-    `SELECT trans_id, exvalue, TO_CHAR(fulldate, 'YYYY-MM-DD HH24:MI:SS'), note
+    `SELECT trans_id, exvalue, TO_CHAR(fulldate, 'YYYY-MM-DD HH24:MI:SS'), note, category
        FROM expense
       WHERE uname = :uname AND wallet_id = :wallet_id${filters}
       ORDER BY fulldate DESC, trans_id DESC
@@ -68,7 +81,7 @@ async function list(req, res, connection, uname) {
     status: "success",
     data: {
       wallet,
-      transactions: rows.map((r) => ({ id: r[0], exvalue: r[1], datetime: r[2], note: r[3] })),
+      transactions: rows.map((r) => ({ id: r[0], exvalue: r[1], datetime: r[2], note: r[3], category: describe(r[4], r[1]) })),
       has_more: result.rows.length > limit,
       offset,
       limit,
@@ -77,7 +90,7 @@ async function list(req, res, connection, uname) {
 }
 
 async function update(req, res, connection, uname) {
-  const { id, exvalue, targetdate, detail } = req.body || {};
+  const { id, exvalue, targetdate, detail, category } = req.body || {};
   if (!/^\d{1,15}$/.test(String(id ?? ""))) {
     return badRequest(res, "Field 'id' is required.");
   }
@@ -99,21 +112,49 @@ async function update(req, res, connection, uname) {
     return badRequest(res, "Field 'detail' is too long.");
   }
 
+  if (category !== undefined && category !== null && category !== "") {
+    if (typeof category !== "string" || !isValidFor(category, value)) {
+      return badRequest(res, "Field 'category' is not a valid category for this amount.");
+    }
+  }
+
+  const current = await executeQuery(
+    connection,
+    "SELECT category FROM expense WHERE trans_id = :id AND uname = :uname",
+    { id: Number(id), uname }
+  );
+  if (!current.rows.length) {
+    return res.status(404).json({ status: "error", message: "Record not found" });
+  }
+
+  // Category: the one chosen in the form (and remember it for this note);
+  // otherwise keep the old one if it still fits the sign; otherwise pick again.
+  let newCategory;
+  if (category) {
+    newCategory = category;
+    await remember(connection, uname, note, category);
+  } else if (current.rows[0][0] && isValidFor(current.rows[0][0], value)) {
+    newCategory = current.rows[0][0];
+  } else {
+    newCategory = (await categorize(connection, uname, note, value)).category;
+  }
+
   const result = await executeQuery(
     connection,
     `UPDATE expense
         SET exvalue = :exvalue,
             fulldate = TO_DATE(:targetdate, 'YYYY-MM-DD HH24:MI:SS'),
-            note = :note
+            note = :note,
+            category = :category
       WHERE trans_id = :id AND uname = :uname`,
-    { exvalue: value, targetdate, note, id: Number(id), uname }
+    { exvalue: value, targetdate, note, category: newCategory, id: Number(id), uname }
   );
   if (!result.rowsAffected) {
     return res.status(404).json({ status: "error", message: "Record not found" });
   }
   return res.status(200).json({
     status: "success",
-    data: { id: Number(id), exvalue: value, datetime: targetdate, note },
+    data: { id: Number(id), exvalue: value, datetime: targetdate, note, category: describe(newCategory, value) },
   });
 }
 
