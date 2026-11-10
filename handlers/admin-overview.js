@@ -10,7 +10,7 @@ const { adminAuth } = require("../components/adminAuth");
 // the admin site's origin. Shows usage counts and activity per user, never
 // amounts or record contents.
 
-const DEFAULT_ADMIN_ORIGINS = ["https://linebot-admin.vercel.app"];
+const DEFAULT_ADMIN_ORIGINS = ["https://linebot-admin-six.vercel.app"];
 const instanceStarted = Date.now();
 let requestsServed = 0;
 
