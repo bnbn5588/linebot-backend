@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Expense Wallet</title>
+  <meta name="robots" content="noindex">
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <main id="app" class="app" aria-live="polite">
+    <div class="status" id="status">กำลังโหลด…</div>
+
+    <section id="view" hidden>
+      <header class="topbar">
+        <div class="who">
+          <img id="avatar" class="avatar" alt="" hidden>
+          <div>
+            <div class="hello" id="hello"></div>
+            <label class="wallet-pick">
+              <span class="sr-only">กระเป๋าเงิน</span>
+              <select id="walletSelect"></select>
+            </label>
+          </div>
+        </div>
+        <label class="month-pick">
+          <span class="sr-only">เดือน</span>
+          <input type="month" id="monthInput">
+        </label>
+      </header>
+
+      <section class="tiles" aria-label="สรุปเดือนนี้">
+        <div class="tile">
+          <div class="tile-label">คงเหลือเดือนนี้</div>
+          <div class="tile-value" id="tBalance">–</div>
+        </div>
+        <div class="tile">
+          <div class="tile-label">รายรับ</div>
+          <div class="tile-value small" id="tIncome">–</div>
+        </div>
+        <div class="tile">
+          <div class="tile-label">รายจ่าย</div>
+          <div class="tile-value small" id="tExpense">–</div>
+        </div>
+        <div class="tile">
+          <div class="tile-label">ยอดรวมทั้งหมด</div>
+          <div class="tile-value small" id="tAll">–</div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>คงเหลือรายเดือน</h2>
+          <div class="legend" aria-hidden="true">
+            <span><i class="swatch pos"></i>บวก</span>
+            <span><i class="swatch neg"></i>ติดลบ</span>
+          </div>
+        </div>
+        <div class="chart-sel num" id="chartSel"></div>
+        <div class="chart" id="chart"></div>
+        <div class="tooltip" id="tooltip" role="status" hidden></div>
+        <details class="table-view">
+          <summary>ดูเป็นตาราง</summary>
+          <table>
+            <thead><tr><th>เดือน</th><th>รายรับ</th><th>รายจ่าย</th><th>คงเหลือ</th></tr></thead>
+            <tbody id="monthTable"></tbody>
+          </table>
+        </details>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>แยกตามโน้ต</h2><span class="muted" id="noteMonth"></span></div>
+        <ul class="notes" id="notes"></ul>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>รายการ</h2><span class="muted" id="txMonth"></span></div>
+        <label class="search">
+          <span class="sr-only">ค้นหาโน้ต</span>
+          <input type="search" id="search" placeholder="ค้นหาโน้ต" autocomplete="off">
+        </label>
+        <ul class="tx" id="txList"></ul>
+        <button class="btn ghost wide" id="more" hidden>โหลดเพิ่ม</button>
+      </section>
+    </section>
+  </main>
+
+  <dialog id="editor" class="sheet">
+    <form id="editForm" method="dialog">
+      <h2>แก้ไขรายการ</h2>
+      <div class="seg" role="radiogroup" aria-label="ประเภท">
+        <label><input type="radio" name="sign" value="-" checked> รายจ่าย</label>
+        <label><input type="radio" name="sign" value="+"> รายรับ</label>
+      </div>
+      <label class="field">จำนวนเงิน
+        <input id="fAmount" inputmode="decimal" autocomplete="off" required>
+      </label>
+      <div class="row">
+        <label class="field">วันที่ <input type="date" id="fDate" required></label>
+        <label class="field">เวลา <input type="time" id="fTime" step="1" required></label>
+      </div>
+      <label class="field">โน้ต
+        <input id="fNote" maxlength="250" autocomplete="off" required>
+      </label>
+      <p class="form-error" id="formError" role="alert" hidden></p>
+      <div class="actions">
+        <button type="button" class="btn danger" id="btnDelete">ลบ</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn ghost" id="btnCancel">ยกเลิก</button>
+        <button type="submit" class="btn primary" id="btnSave">บันทึก</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="/config.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

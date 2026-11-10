@@ -28,7 +28,32 @@ async function getWallet(connection, userid) {
   return result.rows.length > 0 ? result.rows : null;
 }
 
+// Resolve which wallet a web request is about. With an explicit wallet_id the
+// wallet must belong to the user; without one the user's current wallet is
+// used. Returns { wallet_id, wallet_name, timezone } or null.
+async function resolveWallet(connection, uname, walletIdParam) {
+  if (walletIdParam !== undefined && walletIdParam !== "") {
+    if (!/^\d+$/.test(String(walletIdParam))) {
+      return null;
+    }
+    const result = await executeQuery(
+      connection,
+      "SELECT wallet_id, wallet_name, timezone FROM wallet WHERE uname = :uname AND wallet_id = :wallet_id",
+      [uname, Number(walletIdParam)]
+    );
+    const row = result.rows[0];
+    return row ? { wallet_id: row[0], wallet_name: row[1], timezone: row[2] } : null;
+  }
+  const current = await getWallet(connection, uname);
+  if (!current) {
+    return null;
+  }
+  const [wallet_id, wallet_name, timezone] = current[0];
+  return { wallet_id, wallet_name, timezone };
+}
+
 module.exports = {
   getWallets,
   getWallet,
+  resolveWallet,
 };

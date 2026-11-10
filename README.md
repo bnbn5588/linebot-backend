@@ -25,8 +25,8 @@ LINE user ─► Firebase Function LineBot (asia-southeast1)
   query paid a ~170 ms round trip; in Tokyo a query takes a few ms.
 - **Keep-warm.** A cron job sends `GET /api/ping` every 5 minutes so users do
   not hit a cold start (see [Keep-warm](#keep-warm)).
-- **No static files.** `"outputDirectory": "public"` (an empty folder) stops
-  Vercel from serving the repo's source files as static assets.
+- **Only `public/` is static.** `"outputDirectory": "public"` stops Vercel from
+  serving the repo's source files; `public/` holds just the LIFF web app.
 
 ## Project structure
 
@@ -38,7 +38,7 @@ components/services.js
 components/utilities.js  # amount parsing, date checks, help text
 apiKeyMiddleware.js   # x-api-key check
 scripts/keepwarm.sh   # cron script for /api/ping
-public/               # intentionally empty (static output dir)
+public/               # LIFF web app (the only static files Vercel serves)
 vercel.json
 ```
 
@@ -65,6 +65,48 @@ x-api-key: <API_KEY>
 | `GET` | `/api/ping` | – | Keep-warm check: runs `SELECT 1 FROM DUAL`, returns `db_ms` |
 
 Unknown routes return 404, a missing or wrong key returns 403.
+
+### Web app (LIFF) endpoints
+
+These are called by the web page in `public/` and use the user's **LINE ID token**
+instead of `API_KEY` (`Authorization: Bearer <liff.getIDToken()>`). The backend
+verifies the token with LINE (`https://api.line.me/oauth2/v2.1/verify`) and uses
+the verified `sub` (LINE userId) as `uname`, so a user can only read or change
+their own records. `API_KEY` must never be put in the web page.
+
+| Method | Endpoint | Parameters | Description |
+|---|---|---|---|
+| `GET` | `/api/me` | – | Current wallet and all wallets (404 `NO_WALLET` if the user never created one) |
+| `GET` | `/api/me-summary` | `wallet_id`, `month` (`YYYY-MM`) | Totals, income/expense/balance per month, totals by note for the month |
+| `GET` | `/api/me-transactions` | `wallet_id`, `month`, `q`, `limit` (≤200), `offset` | Records, newest first; `q` searches notes |
+| `PUT` | `/api/me-transactions` | body: `id`, `exvalue`, `targetdate`, `detail` | Edit a record |
+| `DELETE` | `/api/me-transactions` | `id` | Delete a record |
+
+`wallet_id` is optional (defaults to the current wallet) and must belong to the user.
+Invalid or expired tokens return 401.
+
+## Web app (LIFF)
+
+`public/index.html`, `app.js`, `app.css` — a dashboard (monthly balance chart,
+totals by note) and a record list with search, edit and delete. It runs inside
+LINE (LIFF) or in a desktop browser via `https://liff.line.me/<LIFF ID>`.
+
+Setup in LINE Developers Console:
+
+1. Under the **same provider as the bot's Messaging API channel**, create a
+   **LINE Login** channel (LINE user IDs are per provider; another provider gives
+   different IDs that will not match `uname`).
+2. LIFF tab → Add: size **Full**, scopes `openid` and `profile`, endpoint URL
+   `https://bot-backend-three.vercel.app/`.
+3. Put the LIFF ID in `public/config.js` and the channel ID in
+   `DEFAULT_LOGIN_CHANNEL_ID` (`components/lineAuth.js`) or the
+   `LINE_LOGIN_CHANNEL_ID` env var. Neither value is secret.
+4. Publish the channel (while it is "Developing" only testers can log in).
+5. Optional: add a rich menu button linking to `https://liff.line.me/<LIFF ID>`.
+
+Local testing without LINE: run `local-server.js` with
+`LINE_VERIFY_URL` pointing at a stub verifier and open
+`http://127.0.0.1:3100/?mocktoken=<token>` (only honored on localhost).
 
 ## Environment variables
 
