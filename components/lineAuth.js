@@ -15,7 +15,7 @@ const VERIFY_URL =
 
 // Channel ID of the LINE Login channel that owns the LIFF app. Not a secret
 // (it is visible in every ID token). The env var overrides it, e.g. for tests.
-const DEFAULT_LOGIN_CHANNEL_ID = "";
+const DEFAULT_LOGIN_CHANNEL_ID = "2012532003";
 
 // Verified tokens are cached until they expire, so a page that makes several
 // API calls verifies its token with LINE only once per function instance.

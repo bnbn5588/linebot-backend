@@ -3,6 +3,6 @@
 //         with this site's URL as its endpoint.
 // apiBase: the backend API (admin endpoints allow this site's origin via CORS).
 window.ADMIN_CONFIG = {
-  liffId: "",
+  liffId: "2012532003-DIi79bdm",
   apiBase: "https://bot-backend-three.vercel.app/api",
 };

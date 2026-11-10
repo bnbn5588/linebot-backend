@@ -3,7 +3,7 @@
 // ADMIN_USER_IDS (comma-separated) overrides the list below.
 const { lineAuth } = require("./lineAuth");
 
-const DEFAULT_ADMIN_USER_IDS = [];
+const DEFAULT_ADMIN_USER_IDS = ["U0bc03a3db916459eeac5bd01c9708b8e"];
 
 function adminIds() {
   const fromEnv = (process.env.ADMIN_USER_IDS || "")
