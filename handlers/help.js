@@ -6,7 +6,7 @@ module.exports = async (req, res) => {
   apiKeyMiddleware(req, res, async () => {
     try {
       // Call the helpCommand function
-      const message = helpCommand();
+      const message = helpCommand(req.query && req.query.lang);
 
       // Return the message as a JSON response
       res.status(200).json({
