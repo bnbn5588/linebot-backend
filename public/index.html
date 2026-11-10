@@ -21,6 +21,7 @@
               <span class="sr-only">กระเป๋าเงิน</span>
               <select id="walletSelect"></select>
             </label>
+            <div class="wallet-total">คงเหลือทั้งหมด <span class="num" id="tAll">–</span></div>
           </div>
         </div>
         <label class="month-pick">
@@ -41,10 +42,6 @@
         <div class="tile">
           <div class="tile-label">รายจ่าย</div>
           <div class="tile-value small" id="tExpense">–</div>
-        </div>
-        <div class="tile">
-          <div class="tile-label">ยอดรวมทั้งหมด</div>
-          <div class="tile-value small" id="tAll">–</div>
         </div>
       </section>
 
@@ -81,6 +78,9 @@
 
       <section class="card">
         <div class="card-head"><h2>แยกตามโน้ต</h2><span class="muted" id="noteMonth"></span></div>
+        <div class="chip-row" id="noteChipRow" hidden>
+          <button type="button" class="chip" id="noteChip" aria-label="ล้างตัวกรองหมวด"></button>
+        </div>
         <ul class="notes" id="notes"></ul>
       </section>
 

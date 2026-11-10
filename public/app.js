@@ -229,7 +229,7 @@
 
   // ---------- summary
   async function loadSummary() {
-    const data = await api("me-summary?" + q({ wallet_id: state.wallet.wallet_id, month: state.month, type: state.type }));
+    const data = await api("me-summary?" + q({ wallet_id: state.wallet.wallet_id, month: state.month, type: state.type, category: state.category ? state.category.key : "" }));
     state.summary = data;
     renderTiles();
     renderChart();
@@ -420,10 +420,17 @@
 
   function setCategoryFilter(c) {
     state.category = c ? { key: c.key, label: c.label, icon: c.icon, kind: c.kind } : null;
-    $("catChipRow").hidden = !state.category;
-    if (state.category) $("catChip").textContent = `${state.category.icon} ${state.category.label}  ✕`;
-    if (state.summary) renderCategories();
-    run(() => loadTx(true));
+    showCategoryChips();
+    // Reload the summary too: the by-note list follows the category
+    run(loadAll);
+  }
+
+  function showCategoryChips() {
+    const label = state.category ? `${state.category.icon} ${state.category.label}  ✕` : "";
+    for (const [row, chip] of [["catChipRow", "catChip"], ["noteChipRow", "noteChip"]]) {
+      $(row).hidden = !state.category;
+      $(chip).textContent = label;
+    }
   }
 
   // ---------- remembered categories
@@ -663,7 +670,7 @@
       store.set("type", e.target.value);
       if (state.category && state.type !== "all" && state.category.kind !== state.type) {
         state.category = null;
-        $("catChipRow").hidden = true;
+        showCategoryChips();
       }
       hideTip();
       run(loadAll);
@@ -687,6 +694,7 @@
     }, 300);
   });
   $("catChip").addEventListener("click", () => setCategoryFilter(null));
+  $("noteChip").addEventListener("click", () => setCategoryFilter(null));
   $("memoryCard").addEventListener("toggle", () => { if ($("memoryCard").open) run(loadMemory); });
   $("more").addEventListener("click", () => run(() => loadTx(false)));
   $("editForm").addEventListener("submit", save);

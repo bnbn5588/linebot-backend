@@ -6,7 +6,8 @@ const {
 const { resolveWallet } = require("../components/services");
 const { lineAuth } = require("../components/lineAuth");
 const { typeCondition } = require("../components/utilities");
-const { describe } = require("../components/categories");
+const { describe, CATEGORIES } = require("../components/categories");
+const CATEGORY_KEYS = new Set(CATEGORIES.map((c) => c.key));
 
 // GET /api/me-summary?wallet_id=&month=YYYY-MM
 // Dashboard data for one wallet of the signed-in user: overall totals, a row
@@ -17,7 +18,10 @@ module.exports = async (req, res) => {
     return res.status(405).json({ status: "error", message: "Use GET." });
   }
   return lineAuth(req, res, async (uname) => {
-    const { wallet_id, month, type } = req.query;
+    const { wallet_id, month, type, category } = req.query;
+    if (category !== undefined && category !== "" && !CATEGORY_KEYS.has(category)) {
+      return res.status(400).json({ status: "error", message: "Unknown 'category'." });
+    }
     const typeSql = typeCondition(type);
     if (typeSql === null) {
       return res.status(400).json({
@@ -71,14 +75,24 @@ module.exports = async (req, res) => {
       const monthFilter = month
         ? "AND fulldate >= TO_DATE(:month, 'YYYY-MM') AND fulldate < ADD_MONTHS(TO_DATE(:month, 'YYYY-MM'), 1)"
         : "";
+      // By-note totals can be narrowed to one category (the category the user
+      // tapped); old records without a category count as "other".
+      const noteBinds = month ? { ...binds, month } : { ...binds };
+      let categoryFilter = "";
+      if (category) {
+        categoryFilter = /^other_/.test(category)
+          ? " AND (category = :category OR category IS NULL)"
+          : " AND category = :category";
+        noteBinds.category = category;
+      }
       const notes = await executeQuery(
         connection,
         `SELECT lower(note), sum(exvalue), count(*)
            FROM expense
-          WHERE uname = :uname AND wallet_id = :wallet_id ${monthFilter}${typeSql}
+          WHERE uname = :uname AND wallet_id = :wallet_id ${monthFilter}${typeSql}${categoryFilter}
           GROUP BY lower(note)
           ORDER BY 2`,
-        month ? { ...binds, month } : binds
+        noteBinds
       );
 
       // Records saved before categories existed have CATEGORY = NULL: count
@@ -116,6 +130,7 @@ module.exports = async (req, res) => {
           })),
           month: month || null,
           type: type || "all",
+          category: category || null,
           by_note: notes.rows.map((r) => ({ note: r[0], total: r[1], count: r[2] })),
           by_category: cats.rows.map((r) => ({ ...describe(r[0], r[3]), total: r[1], count: r[2] })),
         },
