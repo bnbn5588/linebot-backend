@@ -103,62 +103,9 @@ function getMRange(indate) {
   return mrange;
 }
 
-const WEB_APP_URL = "https://liff.line.me/2012532003-r80iatKj";
-
-// Help text for the bot. lang "th" = Thai, anything else = English.
-// Keep in sync with the commands handled by line-bot-fb (functions/index.js).
+// Help text lives in components/help.js
 function helpCommand(lang) {
-  const th = lang === "th";
-  const commands = th
-    ? [
-        { name: "บันทึกรายจ่าย / รายรับ", command: "{+,-}จำนวน โน้ต [#หมวด] [-d YYYY-MM-DD] [-h HH:mm]",
-          description: "ใช้ - สำหรับรายจ่าย และ + สำหรับรายรับ ตามด้วยโน้ตสั้นๆ ระบบเลือกหมวดให้อัตโนมัติ ถ้าอยากระบุเองให้ใส่ #หมวด (เช่น #อาหาร #เดินทาง) ใส่วันที่ (-d) หรือเวลา (-h) ได้ เช่น -120 ข้าวเที่ยง, -60 กาแฟ #เครื่องดื่ม, +1,500 เงินเดือน -d 2026-11-01" },
-        { name: "การ์ดหลังบันทึก", command: "(กดปุ่มบนการ์ด)",
-          description: "หลังบันทึกจะได้การ์ดสรุป มีปุ่ม 🏷️ เปลี่ยนหมวด (ระบบจะจำไว้ใช้กับโน้ตเดียวกันครั้งต่อไป), ✏️ แก้ไข (เปิดหน้าเว็บ) และ 🗑️ ลบ (มีให้ยืนยันก่อน)" },
-        { name: "ยอดคงเหลือทั้งหมด", command: "sumall",
-          description: "ยอดรวม (รายรับ + รายจ่าย) ของกระเป๋าปัจจุบันตั้งแต่รายการแรก" },
-        { name: "ยอดรายเดือน", command: "sumbymonth",
-          description: "ยอดรวม (รายรับ + รายจ่าย) แยกตามเดือน" },
-        { name: "เฉลี่ยต่อวัน", command: "avgbymonth",
-          description: "ยอดเฉลี่ยต่อวันของแต่ละเดือน" },
-        { name: "แยกตามโน้ต", command: "sumbynote [-m [YYYY-MM]]",
-          description: "ยอดรวมแยกตามโน้ตทั้งหมด ใส่ -m เพื่อดูเดือนนี้ หรือ -m YYYY-MM เพื่อดูเดือนที่ต้องการ" },
-        { name: "ดูกระเป๋าเงิน", command: "wallet",
-          description: "แสดงกระเป๋าทั้งหมด * คือกระเป๋าที่ใช้อยู่" },
-        { name: "สลับกระเป๋า", command: "wallet [id]",
-          description: "เปลี่ยนกระเป๋าที่ใช้อยู่ เช่น wallet 1" },
-        { name: "สร้างกระเป๋า", command: "create [ชื่อ] [timezone]",
-          description: "สร้างกระเป๋าใหม่และใช้เป็นกระเป๋าปัจจุบัน เช่น create main Asia/Bangkok" },
-        { name: "สุ่มร้านอาหาร", command: "(แชร์ตำแหน่ง หรือกด 📍)",
-          description: "แชร์ตำแหน่งเพื่อสุ่มร้านอาหารที่เปิดอยู่ในระยะ 1 กม." },
-        { name: "หน้าเว็บ", command: WEB_APP_URL,
-          description: "ดูกราฟ แยกตามหมวด/โน้ต ค้นหา แก้ไข ลบรายการ และจัดการหมวดที่ระบบจำไว้ (กดปุ่ม 🌐 เปิดเว็บ ก็ได้)" },
-      ]
-    : [
-        { name: "Add Transaction", command: "{+,-}amount note [#category] [-d YYYY-MM-DD] [-h HH:mm]",
-          description: "Record an expense (use '-') or income (use '+') with a short note. Optionally set the date (-d) and/or time (-h). The category is picked automatically; add #category to choose it (e.g. #food #อาหาร). e.g. -120 lunch, -60 coffee #drink, +1,500 salary -d 2026-11-01" },
-        { name: "Record Card", command: "(tap the card buttons)",
-          description: "After saving, the bot replies with a card: 🏷️ change category (remembered for the same note next time), ✏️ edit (opens the web app), 🗑️ delete (asks to confirm)." },
-        { name: "Total Balance", command: "sumall",
-          description: "Overall balance (income + expenses) of the current wallet since its first transaction." },
-        { name: "Monthly Total Balance", command: "sumbymonth",
-          description: "Balance (income + expenses) for each month." },
-        { name: "Average Daily Balance", command: "avgbymonth",
-          description: "Average daily balance (income + expenses) for each month." },
-        { name: "Group by Note", command: "sumbynote [-m [YYYY-MM]]",
-          description: "Totals grouped by note, all-time. Add -m for this month, or -m YYYY-MM for a specific month." },
-        { name: "List Wallets", command: "wallet",
-          description: "List your wallets. * marks the current one." },
-        { name: "Switch Wallet", command: "wallet [id]",
-          description: "Switch the current wallet, e.g. wallet 1" },
-        { name: "Create Wallet", command: "create [wallet_name] [timezone]",
-          description: "Create a new wallet and make it current, e.g. create main Asia/Bangkok" },
-        { name: "Random Restaurant", command: "(share your location or tap 📍)",
-          description: "Share a location to get a random open restaurant within 1 km." },
-        { name: "Web App", command: WEB_APP_URL,
-          description: "Charts, totals by category and note, search, edit and delete records, and manage remembered categories (or tap 🌐)." },
-      ];
-  return { lang: th ? "th" : "en", commands };
+  return require("./help").helpContent(lang);
 }
 
 module.exports = {
