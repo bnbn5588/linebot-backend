@@ -61,7 +61,7 @@ x-api-key: <API_KEY>
 | `GET` | `/api/wallets` | `userid` | All wallets of a user |
 | `POST` | `/api/createWallet` | body: `uname`, `wallet_name`, `timezone` | Create a wallet and make it current (one transaction) |
 | `POST` | `/api/changeWallet` | body: `uname`, `wallet_id` | Switch the current wallet |
-| `GET` | `/api/help` | – | Command list shown by the bot's `help` |
+| `GET` | `/api/help` | `lang` (`th` or `en`) | Help content as cards (shown by the bot's `help` / `ช่วยเหลือ`); edit it in `components/help.js` |
 | `GET` | `/api/ping` | – | Keep-warm check: runs `SELECT 1 FROM DUAL`, returns `db_ms` |
 | `GET` | `/api/admin-overview` | – | Admin site data (LINE ID token of an admin, see [Admin website](#admin-website)) |
 
