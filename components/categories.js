@@ -186,11 +186,20 @@ async function categorize(connection, uname, rawNote, amount) {
   return { category: fallbackFor(amount), source: "fallback", note };
 }
 
-// Remember the user's choice for this note. "Other" is not remembered, so it
-// never overrides a keyword match later.
+// Remember the user's choice for this note. Choosing "other" forgets what
+// was remembered instead, so the note goes back to keyword guessing (an
+// "other" memory would otherwise override keywords forever).
 async function remember(connection, uname, note, category) {
   const key = noteKey(note);
-  if (!key || category === "other_expense" || category === "other_income") return;
+  if (!key) return;
+  if (category === "other_expense" || category === "other_income") {
+    await executeQuery(
+      connection,
+      "DELETE FROM category_memory WHERE uname = :uname AND note_key = :note_key",
+      { uname, note_key: key }
+    );
+    return;
+  }
   await executeQuery(
     connection,
     `MERGE INTO category_memory m
