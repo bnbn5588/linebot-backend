@@ -87,10 +87,10 @@ module.exports = async (req, res) => {
       }
       const notes = await executeQuery(
         connection,
-        `SELECT lower(note), sum(exvalue), count(*)
+        `SELECT lower(trim(note)), sum(exvalue), count(*)
            FROM expense
           WHERE uname = :uname AND wallet_id = :wallet_id ${monthFilter}${typeSql}${categoryFilter}
-          GROUP BY lower(note)
+          GROUP BY lower(trim(note))
           ORDER BY 2`,
         noteBinds
       );

@@ -35,11 +35,11 @@ module.exports = async (req, res) => {
       let data_tuple;
       if (month == null) {
         sql_select_with_param =
-          "select lower(note), sum(exvalue), count(*) as count from expense where UNAME = :uname and WALLET_ID = :wallet_id group by lower(note) order by 2 asc";
+          "select lower(trim(note)), sum(exvalue), count(*) as count from expense where UNAME = :uname and WALLET_ID = :wallet_id group by lower(trim(note)) order by 2 asc";
         data_tuple = [uname, wallet_id];
       } else {
         sql_select_with_param =
-          "select lower(note), sum(exvalue), count(*) as count from expense where UNAME = :uname and WALLET_ID = :wallet_id and TO_CHAR(fulldate,'YYYY-MM') = :month group by lower(note) order by 2 asc";
+          "select lower(trim(note)), sum(exvalue), count(*) as count from expense where UNAME = :uname and WALLET_ID = :wallet_id and TO_CHAR(fulldate,'YYYY-MM') = :month group by lower(trim(note)) order by 2 asc";
         data_tuple = [uname, wallet_id, month];
       }
 

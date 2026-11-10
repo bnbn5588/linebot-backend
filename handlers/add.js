@@ -20,7 +20,7 @@ module.exports = async (req, res) => {
     const { uname, wallet_id, exvalue, targetdate, detail } = req.body || {};
 
     // 'detail' is required — normalise to a trimmed string before checking
-    const note = typeof detail === "string" ? detail.trim() : "";
+    const note = typeof detail === "string" ? detail.replace(/\s+/g, " ").trim() : "";
 
     // Validate required fields
     if (!uname || isMissing(wallet_id) || isMissing(exvalue) || !note) {

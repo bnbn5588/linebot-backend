@@ -111,7 +111,7 @@ async function update(req, res, connection, uname) {
   if (!isValidDateTime(targetdate)) {
     return badRequest(res, "Field 'targetdate' must be a valid 'YYYY-MM-DD HH:MM:SS'.");
   }
-  const note = typeof detail === "string" ? detail.trim() : "";
+  const note = typeof detail === "string" ? detail.replace(/\s+/g, " ").trim() : "";
   if (!note) {
     return badRequest(res, "Field 'detail' is required.");
   }
