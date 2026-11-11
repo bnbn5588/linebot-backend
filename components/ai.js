@@ -10,11 +10,19 @@ const DEFAULT_MODEL = "gemini-3.5-flash-lite";
 const TIMEOUT_MS = 8000;
 
 class AiError extends Error {
-  constructor(code, message) {
+  constructor(code, message, retryable = false) {
     super(message);
     this.code = code;
+    this.retryable = retryable; // busy/overloaded/timeout: worth one more try
   }
 }
+
+// Gemini (free tier especially) sometimes answers 503 "high demand" or 429.
+// Retry a couple of times, but finish within the budget: a Vercel function
+// (and its waitUntil work) is stopped after ~10 s.
+const RETRY_DELAYS_MS = [1000, 2500];
+const BUDGET_MS = 8000;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const model = () => process.env.GEMINI_MODEL || DEFAULT_MODEL;
 const thinkingLevel = () => {
@@ -42,8 +50,23 @@ function prompt(note, kind) {
 }
 
 // Returns { category, confidence, model }. Throws AiError on any failure.
-async function suggestCategory(note, kind) {
+async function suggestCategory(note, kind, { budgetMs = BUDGET_MS } = {}) {
   if (!enabled()) throw new AiError("NO_KEY", "GEMINI_API_KEY is not set");
+  const start = Date.now();
+  for (let attempt = 0; ; attempt++) {
+    const left = budgetMs - (Date.now() - start);
+    try {
+      return await askOnce(note, kind, Math.max(1000, Math.min(TIMEOUT_MS, left)));
+    } catch (e) {
+      const delay = RETRY_DELAYS_MS[attempt];
+      const elapsed = Date.now() - start;
+      if (!(e instanceof AiError) || !e.retryable || delay === undefined || elapsed + delay + 1500 > budgetMs) throw e;
+      await sleep(delay);
+    }
+  }
+}
+
+async function askOnce(note, kind, timeoutMs) {
   const keys = CATEGORIES.filter((c) => c.kind === kind).map((c) => c.key);
   const m = model();
   const base = process.env.GEMINI_BASE_URL || "https://generativelanguage.googleapis.com/v1beta";
@@ -70,16 +93,17 @@ async function suggestCategory(note, kind) {
           },
         },
       }),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (e) {
-    throw new AiError("NETWORK", e.name === "TimeoutError" ? "Gemini timed out" : "Gemini unreachable");
+    throw new AiError("NETWORK", e.name === "TimeoutError" ? "Gemini timed out" : "Gemini unreachable", true);
   }
   if (!r.ok) {
     let msg = "";
     try { msg = ((await r.json()).error || {}).message || ""; } catch { /* ignore */ }
     // never echo the key; Gemini error messages do not contain it
-    throw new AiError(r.status === 429 ? "QUOTA" : "HTTP", `Gemini HTTP ${r.status}${msg ? ": " + msg.slice(0, 200) : ""}`);
+    throw new AiError(r.status === 429 ? "QUOTA" : r.status >= 500 ? "BUSY" : "HTTP",
+      `Gemini HTTP ${r.status}${msg ? ": " + msg.slice(0, 200) : ""}`, r.status === 429 || r.status >= 500);
   }
   let out;
   try {

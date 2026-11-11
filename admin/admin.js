@@ -425,7 +425,7 @@
 
   // "ลองเดาหมวด": same steps as a real add, read-only (/api/admin-category-guess)
   const STEP_TH = { explicit: "#tag ในโน้ต", memory: "ความจำของผู้ใช้", shared: "ตารางหมวดกลาง", keyword: "คำในโน้ต", fallback: "ไม่เจอ → อื่นๆ" };
-  const AI_ERR = { NO_KEY: "ยังไม่ได้ตั้ง GEMINI_API_KEY บน server", QUOTA: "เกินโควตา Gemini ลองใหม่ภายหลัง", NETWORK: "ติดต่อ Gemini ไม่ได้ (timeout)", EMPTY: "ไม่มีข้อความให้ถาม (เหลือแค่ #tag)" };
+  const AI_ERR = { NO_KEY: "ยังไม่ได้ตั้ง GEMINI_API_KEY บน server", QUOTA: "เกินโควตา Gemini ลองใหม่ภายหลัง", BUSY: "Gemini มีคนใช้เยอะอยู่ (503) ลองใหม่อีกครั้ง", NETWORK: "ติดต่อ Gemini ไม่ได้ (timeout)", EMPTY: "ไม่มีข้อความให้ถาม (เหลือแค่ #tag)" };
   const catText = (c) => `${c.icon} ${c.label}`;
   function guessMsg(text, isErr) { const m = $("guessMsg"); m.textContent = text || ""; m.classList.toggle("err", !!isErr); }
   function fillGuessUsers() {
