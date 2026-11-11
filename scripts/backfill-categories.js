@@ -1,5 +1,6 @@
 // Guess categories for records saved before categories existed (CATEGORY IS NULL).
-// Uses the same rules as new records except #tags: remembered note → keyword.
+// Uses the same rules as new records except #tags: remembered note → shared
+// mapping (CATEGORY_MAP) → keyword.
 // Records with no match stay NULL (shown as "other").
 //
 // Dry run (default): prints how many records would get each category. Nothing
@@ -10,7 +11,7 @@
 const path = require("path");
 require("dotenv").config({ path: path.join(__dirname, "..", process.env.ENV_FILE || ".env") });
 const oracledb = require("oracledb");
-const { byKeyword, noteKey, isValidFor } = require("../components/categories");
+const { byKeyword, noteKey, isValidFor, kindOf } = require("../components/categories");
 
 const APPLY = process.argv.includes("--apply");
 
@@ -21,12 +22,19 @@ const APPLY = process.argv.includes("--apply");
   const memory = new Map();
   for (const [u, k, cat] of (await c.execute("SELECT uname, note_key, category FROM category_memory")).rows) memory.set(u + "\u0000" + k, cat);
 
+  const shared = new Map();
+  for (const [k, kind, cat] of (await c.execute("SELECT note_key, kind, category FROM category_map")).rows) shared.set(k + "\u0000" + kind, cat);
+
   const rows = (await c.execute("SELECT trans_id, uname, exvalue, note FROM expense WHERE category IS NULL")).rows;
   const counts = {};
   const updates = [];
   for (const [id, uname, amount, note] of rows) {
     const remembered = memory.get(uname + "\u0000" + noteKey(note));
-    const cat = remembered && isValidFor(remembered, amount) ? remembered : byKeyword(note, amount);
+    const fromShared = shared.get(noteKey(note) + "\u0000" + kindOf(amount));
+    const cat =
+      (remembered && isValidFor(remembered, amount) && remembered) ||
+      (fromShared && isValidFor(fromShared, amount) && fromShared) ||
+      byKeyword(note, amount);
     const label = cat || "(no match, stays other)";
     counts[label] = (counts[label] || 0) + 1;
     if (cat) updates.push({ id, cat });

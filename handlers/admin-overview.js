@@ -4,34 +4,15 @@ const {
   closeConnection,
 } = require("../components/db");
 const { adminAuth } = require("../components/adminAuth");
+const { adminCors } = require("../components/adminCors");
 
 // GET /api/admin-overview — data for the admin website (a separate site/domain).
 // Auth: LINE ID token of an admin (components/adminAuth.js), CORS limited to
 // the admin site's origin. Shows usage counts and activity per user, never
 // amounts or record contents.
 
-const DEFAULT_ADMIN_ORIGINS = ["https://linebot-admin-six.vercel.app"];
 const instanceStarted = Date.now();
 let requestsServed = 0;
-
-function allowedOrigins() {
-  const fromEnv = (process.env.ADMIN_ORIGINS || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  return fromEnv.length ? fromEnv : DEFAULT_ADMIN_ORIGINS;
-}
-
-function cors(req, res) {
-  const origin = req.headers.origin;
-  if (origin && allowedOrigins().includes(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-    res.setHeader("Vary", "Origin");
-    res.setHeader("Access-Control-Allow-Headers", "Authorization");
-    res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-    res.setHeader("Access-Control-Max-Age", "600");
-  }
-}
 
 async function rows(connection, sql, binds = []) {
   return (await executeQuery(connection, sql, binds)).rows;
@@ -85,7 +66,7 @@ async function lineInfo(userIds) {
 }
 
 module.exports = async (req, res) => {
-  cors(req, res);
+  adminCors(req, res);
   if (req.method === "OPTIONS") {
     return res.status(204).end();
   }

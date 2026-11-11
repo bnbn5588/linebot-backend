@@ -5,8 +5,11 @@
 //   2. memory    — the user picked a category for this same note before
 //                  (table CATEGORY_MEMORY, per user, written whenever the user
 //                  sets or changes a category)
-//   3. keyword   — the note contains a known word, e.g. กาแฟ → drink
-//   4. fallback  — other_expense / other_income
+//   3. shared    — the same note is in the shared mapping for everyone
+//                  (table CATEGORY_MAP, edited on the admin site; source
+//                  'admin' or 'ai')
+//   4. keyword   — the note contains a known word, e.g. กาแฟ → drink
+//   5. fallback  — other_expense / other_income
 // A category must match the sign of the amount (expense < 0, income > 0);
 // a remembered or explicit category of the wrong kind is ignored.
 
@@ -177,6 +180,27 @@ async function fromMemory(connection, uname, note, amount) {
   return cat && isValidFor(cat, amount) ? cat : null;
 }
 
+// Shared mapping (same for every user), exact note match.
+async function fromShared(connection, note, amount) {
+  const key = noteKey(note);
+  if (!key) return null;
+  let r;
+  try {
+    r = await executeQuery(
+      connection,
+      "SELECT category FROM category_map WHERE note_key = :note_key AND kind = :kind",
+      { note_key: key, kind: kindOf(amount) }
+    );
+  } catch (e) {
+    // Table not created yet (migration 002 not applied): skip this step
+    // rather than fail the whole add.
+    if (e && e.errorNum === 942) return null;
+    throw e;
+  }
+  const cat = r.rows[0] && r.rows[0][0];
+  return cat && isValidFor(cat, amount) ? cat : null;
+}
+
 // Decide the category of a record. Returns { category, source, note } where
 // note is the text to store (with a recognised #tag removed).
 async function categorize(connection, uname, rawNote, amount) {
@@ -187,6 +211,8 @@ async function categorize(connection, uname, rawNote, amount) {
   }
   const remembered = await fromMemory(connection, uname, note, amount);
   if (remembered) return { category: remembered, source: "memory", note };
+  const shared = await fromShared(connection, note, amount);
+  if (shared) return { category: shared, source: "shared", note };
   const keyword = byKeyword(note, amount);
   if (keyword) return { category: keyword, source: "keyword", note };
   return { category: fallbackFor(amount), source: "fallback", note };
@@ -249,6 +275,7 @@ function publicList() {
 }
 
 module.exports = {
+  kindOf,
   NOTE_KEY_SQL,
   forgetIfUnused,
   CATEGORIES,
