@@ -281,6 +281,7 @@
   // ---- shared note → category mapping (/api/admin-category-map)
   let map = { categories: [], items: [] };
   const KIND_TH = { expense: "รายจ่าย", income: "รายรับ" };
+  const SOURCE_TH = { admin: "admin", history: "จากประวัติ", ai: "AI" };
   const catLabel = (key) => { const c = map.categories.find((x) => x.key === key); return c ? `${c.icon} ${c.label}` : key; };
   function mapMsg(text, isErr) { const m = $("mapMsg"); m.textContent = text || ""; m.classList.toggle("err", !!isErr); }
   async function mapApi(method, query, body) {
@@ -348,7 +349,7 @@
         }
       });
       const tdSel = el("td"); tdSel.append(sel);
-      const tdSrc = el("td"); tdSrc.append(el("span", "src " + it.source, it.source === "ai" ? "AI" : "admin"));
+      const tdSrc = el("td"); tdSrc.append(el("span", "src " + it.source, SOURCE_TH[it.source] || it.source));
       const del = el("button", "btn small", "ลบ");
       del.type = "button";
       del.addEventListener("click", async () => {
