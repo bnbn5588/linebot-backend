@@ -12,6 +12,8 @@ const { NOTE_KEY_SQL, CATEGORIES, noteKey, publicList, adminList } = require("..
 //   GET                                  list + categories + record counts
 //                                        + rules (every category's #tags, keywords, places)
 //   PUT    body { note, category }       add or change (kind follows the category)
+//          + ai: { confidence, model }   save an AI suggestion (source 'ai'); never
+//                                        replaces an admin/history row (409)
 //   DELETE ?note_key=&kind=              remove
 // Admins only (LINE ID token, components/adminAuth.js); CORS for the admin site.
 // Rows added by AI later have source 'ai'; saving a row here makes it 'admin'.
@@ -26,7 +28,7 @@ function bad(res, message) {
 async function list(req, res, connection) {
   const r = await executeQuery(
     connection,
-    `SELECT m.note_key, m.kind, m.category, m.source, TO_CHAR(m.updated_at, 'YYYY-MM-DD HH24:MI'), NVL(e.cnt, 0)
+    `SELECT m.note_key, m.kind, m.category, m.source, TO_CHAR(m.updated_at, 'YYYY-MM-DD HH24:MI'), NVL(e.cnt, 0), m.confidence, m.model
        FROM category_map m
        LEFT JOIN (SELECT ${NOTE_KEY_SQL} AS note_key,
                          CASE WHEN exvalue > 0 THEN 'income' ELSE 'expense' END AS kind,
@@ -43,8 +45,8 @@ async function list(req, res, connection) {
     data: {
       categories: publicList(),
       rules: adminList(),
-      items: r.rows.map(([note_key, kind, category, source, updated_at, records]) => ({
-        note_key, kind, category, source, updated_at, records,
+      items: r.rows.map(([note_key, kind, category, source, updated_at, records, confidence, model]) => ({
+        note_key, kind, category, source, updated_at, records, confidence, model,
       })),
     },
   });
@@ -57,12 +59,40 @@ async function upsert(req, res, connection, adminId) {
   if (Buffer.byteLength(key, "utf8") > 250) return bad(res, "Field 'note' is too long.");
   const kind = typeof category === "string" ? KIND.get(category) : undefined;
   if (!kind) return bad(res, "Field 'category' must be a category key.");
+  const fromAi = req.body.ai;
+  if (fromAi !== undefined) {
+    const c = fromAi && Number(fromAi.confidence);
+    const model = fromAi && fromAi.model;
+    if (!Number.isFinite(c) || c < 0 || c > 1 || typeof model !== "string" || !model || model.length > 60) {
+      return bad(res, "Field 'ai' must be { confidence: 0-1, model }.");
+    }
+    const existing = await executeQuery(
+      connection,
+      "SELECT source FROM category_map WHERE note_key = :note_key AND kind = :kind",
+      { note_key: key, kind }
+    );
+    const src = existing.rows[0] && existing.rows[0][0];
+    if (src && src !== "ai") {
+      return res.status(409).json({ status: "error", message: `This note is already in the table (source ${src}); AI does not replace it.` });
+    }
+    await executeQuery(
+      connection,
+      `MERGE INTO category_map m
+       USING (SELECT :note_key AS note_key, :kind AS kind FROM dual) s
+          ON (m.note_key = s.note_key AND m.kind = s.kind)
+        WHEN MATCHED THEN UPDATE SET m.category = :category, m.source = 'ai', m.confidence = :confidence, m.model = :model, m.updated_at = SYSDATE, m.updated_by = :admin_id
+        WHEN NOT MATCHED THEN INSERT (note_key, kind, category, source, confidence, model, updated_at, updated_by)
+             VALUES (s.note_key, s.kind, :category, 'ai', :confidence, :model, SYSDATE, :admin_id)`,
+      { note_key: key, kind, category, confidence: Math.round(c * 1000) / 1000, model, admin_id: adminId }
+    );
+    return res.status(200).json({ status: "success", data: { note_key: key, kind, category, source: "ai" } });
+  }
   await executeQuery(
     connection,
     `MERGE INTO category_map m
      USING (SELECT :note_key AS note_key, :kind AS kind FROM dual) s
         ON (m.note_key = s.note_key AND m.kind = s.kind)
-      WHEN MATCHED THEN UPDATE SET m.category = :category, m.source = 'admin', m.updated_at = SYSDATE, m.updated_by = :admin_id
+      WHEN MATCHED THEN UPDATE SET m.category = :category, m.source = 'admin', m.confidence = NULL, m.model = NULL, m.updated_at = SYSDATE, m.updated_by = :admin_id
       WHEN NOT MATCHED THEN INSERT (note_key, kind, category, source, updated_at, updated_by)
            VALUES (s.note_key, s.kind, :category, 'admin', SYSDATE, :admin_id)`,
     { note_key: key, kind, category, admin_id: adminId }

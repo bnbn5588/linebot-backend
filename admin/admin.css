@@ -185,3 +185,6 @@ h2 { font-size: 14px; margin: 0; font-weight: 600; }
 .chip.tag { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .chip.hit { border-color: var(--focus); outline: 1px solid var(--focus); color: var(--text-primary); font-weight: 600; }
 .help code { background: var(--surface-2); padding: 1px 4px; border-radius: 4px; }
+.steps li.ai .mark { color: var(--warning); }
+.steps li.ai .what .btn { margin-right: 8px; }
+.steps .err-text { color: var(--critical); }

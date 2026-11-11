@@ -361,7 +361,10 @@
         }
       });
       const tdSel = el("td"); tdSel.append(sel);
-      const tdSrc = el("td"); tdSrc.append(el("span", "src " + it.source, SOURCE_TH[it.source] || it.source));
+      const tdSrc = el("td");
+      const badge = el("span", "src " + it.source, (SOURCE_TH[it.source] || it.source) + (it.source === "ai" && it.confidence != null ? ` ${Math.round(it.confidence * 100)}%` : ""));
+      if (it.model) badge.title = it.model;
+      tdSrc.append(badge);
       const del = el("button", "btn small", "ลบ");
       del.type = "button";
       del.addEventListener("click", async () => {
@@ -405,6 +408,7 @@
 
   // "ลองเดาหมวด": same steps as a real add, read-only (/api/admin-category-guess)
   const STEP_TH = { explicit: "#tag ในโน้ต", memory: "ความจำของผู้ใช้", shared: "ตารางหมวดกลาง", keyword: "คำในโน้ต", fallback: "ไม่เจอ → อื่นๆ" };
+  const AI_ERR = { NO_KEY: "ยังไม่ได้ตั้ง GEMINI_API_KEY บน server", QUOTA: "เกินโควตา Gemini ลองใหม่ภายหลัง", NETWORK: "ติดต่อ Gemini ไม่ได้ (timeout)", EMPTY: "ไม่มีข้อความให้ถาม (เหลือแค่ #tag)" };
   const catText = (c) => `${c.icon} ${c.label}`;
   function guessMsg(text, isErr) { const m = $("guessMsg"); m.textContent = text || ""; m.classList.toggle("err", !!isErr); }
   function fillGuessUsers() {
@@ -429,12 +433,48 @@
     if (s.step === "keyword") return s.category ? `เจอคำว่า "${s.word}"${s.field === "places" ? " (ชื่อร้าน/สถานที่)" : ""} → ${catText(s.category)}` : "ไม่เจอคำที่รู้จัก";
     return catText(s.category);
   }
-  $("guessForm").addEventListener("submit", async (ev) => {
-    ev.preventDefault();
-    const note = $("guessNote").value.trim();
-    if (!note) return;
-    const q = { note, kind: $("guessKind").value };
-    if ($("guessUser").value) q.uname = $("guessUser").value;
+  let lastGuess = null;
+  function aiItem(d) {
+    const s = d.steps.find((x) => x.step === "ai");
+    const li = el("li", "ai" + (s && s.category ? " hit" : ""));
+    const what = el("span", "what");
+    const shared = d.steps.find((x) => x.step === "shared");
+    if (!s) {
+      const b = el("button", "btn small", "ถาม AI");
+      b.type = "button";
+      b.addEventListener("click", () => runGuess(true, b));
+      what.append(b, el("span", "note", "ส่งไปแค่ข้อความโน้ตกับประเภท (ไม่มีชื่อผู้ใช้/จำนวนเงิน)"));
+    } else if (!s.category) {
+      what.append(el("span", "err-text", AI_ERR[s.error] || s.message || "ถาม AI ไม่สำเร็จ"));
+    } else {
+      what.append(`แนะนำ ${catText(s.category)} · มั่นใจ ${Math.round(s.confidence * 100)}%`, el("span", "note", `${s.model} · ยังไม่ได้ใช้ตอนบันทึกจริง เป็นแค่คำแนะนำ`));
+      if (shared && shared.category && shared.source !== "ai") {
+        what.append(el("span", "note", `มีในตารางกลางแล้ว (ที่มา: ${SOURCE_TH[shared.source] || shared.source}) — AI ไม่ทับ`));
+      } else {
+        const b = el("button", "btn small primary", "บันทึกลงตารางกลาง");
+        b.type = "button";
+        b.addEventListener("click", async () => {
+          b.disabled = true;
+          try {
+            await mapApi("PUT", null, { note: d.note_key, category: s.category.key, ai: { confidence: s.confidence, model: s.model } });
+            guessMsg(`บันทึก "${d.note_key}" → ${catText(s.category)} (ที่มา: AI) ลงตารางกลางแล้ว`);
+            b.textContent = "บันทึกแล้ว";
+            loadMap();
+          } catch (e) {
+            guessMsg("บันทึกไม่สำเร็จ: " + e.message, true);
+            b.disabled = false;
+          }
+        });
+        what.append(b);
+      }
+    }
+    li.append(el("span", "mark", s && s.category ? "★" : "–"), el("span", "name", "5. AI (Gemini)"), what);
+    return li;
+  }
+  async function runGuess(withAi, btn) {
+    const q = Object.assign({}, lastGuess);
+    if (withAi) q.ai = "1";
+    if (btn) { btn.disabled = true; btn.textContent = "กำลังถาม…"; }
     $("guessGo").disabled = true;
     guessMsg("");
     try {
@@ -445,20 +485,35 @@
       const d = j.data;
       const res = $("guessResult");
       res.replaceChildren("ผลลัพธ์: ", el("b", "", catText(d.category)), el("span", "muted", "  ← มาจาก: " + STEP_TH[d.source]));
-      if (d.note !== note) res.append(el("span", "note muted", `โน้ตที่จะบันทึก: "${d.note}"`));
-      $("guessSteps").replaceChildren(...d.steps.filter((s) => s.step !== "fallback" || s.used).map((s, i) => {
+      if (d.note !== q.note) res.append(el("span", "note muted", `โน้ตที่จะบันทึก: "${d.note}"`));
+      const steps = d.steps.filter((s) => s.step !== "ai" && (s.step !== "fallback" || s.used));
+      const items = steps.map((s, i) => {
         const li = el("li", (s.used ? "used " : "") + (s.category ? "hit" : ""));
         const what = el("span", "what", stepDetail(s, d));
         if (s.category && !s.used && s.step !== "fallback") what.append(el("span", "note", "ไม่ได้ใช้ เพราะขั้นก่อนหน้าเจอแล้ว"));
         li.append(el("span", "mark", s.used ? "✓" : s.category ? "·" : "–"), el("span", "name", `${i + 1}. ${STEP_TH[s.step]}`), what);
         return li;
-      }));
+      });
+      const fb = items.length === 5 ? items.pop() : null; // fallback row goes after AI
+      if (fb) fb.querySelector(".name").textContent = "6. " + STEP_TH.fallback;
+      items.push(aiItem(d));
+      if (fb) items.push(fb);
+      $("guessSteps").replaceChildren(...items);
       $("guessOut").hidden = false;
     } catch (e) {
       guessMsg("เดาไม่สำเร็จ: " + e.message, true);
+      if (btn) { btn.disabled = false; btn.textContent = "ถาม AI"; }
     } finally {
       $("guessGo").disabled = false;
     }
+  }
+  $("guessForm").addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const note = $("guessNote").value.trim();
+    if (!note) return;
+    lastGuess = { note, kind: $("guessKind").value };
+    if ($("guessUser").value) lastGuess.uname = $("guessUser").value;
+    runGuess(false);
   });
 
   // "หมวดหมู่และคำที่ใช้เดา": read-only view of components/categories.js
