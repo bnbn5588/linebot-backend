@@ -5,7 +5,7 @@ const {
 } = require("../components/db");
 const { adminAuth } = require("../components/adminAuth");
 const { adminCors } = require("../components/adminCors");
-const { NOTE_KEY_SQL, CATEGORIES, noteKey, publicList, adminList } = require("../components/categories");
+const { NOTE_KEY_SQL, CATEGORIES, noteKey, publicList, adminList, isPending } = require("../components/categories");
 
 // /api/admin-category-map — the shared note → category mapping used for
 // every user (after the user's own memory, before keyword guessing).
@@ -15,6 +15,8 @@ const { NOTE_KEY_SQL, CATEGORIES, noteKey, publicList, adminList } = require("..
 //          + ai: { confidence, model }   save an AI suggestion (source 'ai'); never
 //                                        replaces an admin/history row (409)
 //   DELETE ?note_key=&kind=              remove
+// Rows the AI added by itself (updated_by 'auto') with low confidence are
+// 'pending' and not used; saving them here (PUT) confirms them as admin.
 // Admins only (LINE ID token, components/adminAuth.js); CORS for the admin site.
 // Rows added by AI later have source 'ai'; saving a row here makes it 'admin'.
 // Records already saved keep their category; only new records are affected.
@@ -28,7 +30,7 @@ function bad(res, message) {
 async function list(req, res, connection) {
   const r = await executeQuery(
     connection,
-    `SELECT m.note_key, m.kind, m.category, m.source, TO_CHAR(m.updated_at, 'YYYY-MM-DD HH24:MI'), NVL(e.cnt, 0), m.confidence, m.model
+    `SELECT m.note_key, m.kind, m.category, m.source, TO_CHAR(m.updated_at, 'YYYY-MM-DD HH24:MI'), NVL(e.cnt, 0), m.confidence, m.model, m.updated_by
        FROM category_map m
        LEFT JOIN (SELECT ${NOTE_KEY_SQL} AS note_key,
                          CASE WHEN exvalue > 0 THEN 'income' ELSE 'expense' END AS kind,
@@ -45,8 +47,10 @@ async function list(req, res, connection) {
     data: {
       categories: publicList(),
       rules: adminList(),
-      items: r.rows.map(([note_key, kind, category, source, updated_at, records, confidence, model]) => ({
+      items: r.rows.map(([note_key, kind, category, source, updated_at, records, confidence, model, updated_by]) => ({
         note_key, kind, category, source, updated_at, records, confidence, model,
+        auto: updated_by === "auto",
+        pending: isPending(source, updated_by, confidence), // AI not sure: not used until an admin confirms
       })),
     },
   });

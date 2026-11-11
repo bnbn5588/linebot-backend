@@ -6,6 +6,8 @@ const {
 const apiKeyMiddleware = require("../apiKeyMiddleware");
 const oracledb = require("oracledb");
 const { categorize, describe } = require("../components/categories");
+const { afterResponse } = require("../components/background");
+const { aiFill } = require("../components/aiFill");
 const { parseAmount, isMissing, isValidDateTime, isTextWithin } = require("../components/utilities");
 
 module.exports = async (req, res) => {
@@ -87,6 +89,11 @@ module.exports = async (req, res) => {
       );
 
       if (insertResult.rowsAffected > 0) {
+        // Nothing found a category: ask AI after responding (components/aiFill.js)
+        if (cat.source === "fallback") {
+          const id = insertResult.outBinds.id[0];
+          await afterResponse(() => aiFill({ uname, id, note: storedNote, amount: parsedValue }));
+        }
         const db_datefmt = "YYYY-MM-DD";
         const db_monthfmt = "YYYY-MM";
 

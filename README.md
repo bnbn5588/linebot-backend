@@ -153,6 +153,17 @@ Google Cloud, OCI and LINE consoles.
   runs the same steps as a real add (`explain()` in `components/categories.js`)
   without saving anything, and shows every step — including the keyword that
   matched and the shared-table row's source — even after an earlier step won.
+  "ถาม AI" (`?ai=1`) shows Gemini's suggestion; saving it stores a source `ai` row.
+- AI fill (`components/aiFill.js`, env `GEMINI_API_KEY`, optional `GEMINI_MODEL`,
+  `AI_DAILY_CAP` default 200): when `/api/add` finds no category, the record is
+  saved as other and answered right away; then (Vercel `waitUntil`,
+  `components/background.js`) Gemini is asked once per note — only the note
+  text and expense/income are sent. The answer goes into `CATEGORY_MAP`
+  (source `ai`, `updated_by` `auto`, `confidence`, `model`; migration 003). With
+  confidence >= 0.7 the record gets the category and later records use it via
+  the shared table; below that the row is "AI ไม่แน่ใจ" (pending, not used,
+  not asked again) until an admin confirms it on the admin site. Gemini
+  errors store nothing, so the next record retries.
 - Seed from existing records: `node scripts/seed-category-map.js [--min=5]
   [--share=0.6] [--apply]` — notes used at least `min` times get their most
   common category (skipping "other" and notes whose records disagree); existing

@@ -51,7 +51,8 @@ async function guess(req, res, connection) {
       kind: r.kind,
       category: label(r.category),
       source: r.source,
-      steps: r.steps.map((s) => Object.assign({}, s, { category: label(s.category) })),
+      steps: r.steps.map((s) => Object.assign({}, s, { category: label(s.category) },
+        s.pending ? { pending: { category: label(s.pending.category), confidence: s.pending.confidence } } : {})),
     },
   });
 }

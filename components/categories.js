@@ -73,6 +73,12 @@ const CATEGORIES = [
 ];
 
 const BY_KEY = new Map(CATEGORIES.map((c) => [c.key, c]));
+// AI rows added automatically (updated_by 'auto') below this are only
+// suggestions waiting for an admin; they are not used.
+const AI_MIN_CONFIDENCE = 0.7;
+const isPending = (source, updatedBy, confidence) =>
+  source === "ai" && updatedBy === "auto" && !(Number(confidence) >= AI_MIN_CONFIDENCE);
+
 const kindOf = (amount) => (amount > 0 ? "income" : "expense");
 const fallbackFor = (amount) => (amount > 0 ? "other_income" : "other_expense");
 
@@ -188,7 +194,8 @@ async function fromMemory(connection, uname, note, amount) {
 }
 
 // Shared mapping (same for every user), exact note match.
-// Returns { category, source } or null.
+// Returns { category, source, pending, confidence } or null. A pending row
+// (automatic AI answer with low confidence) must not be used.
 async function sharedRow(connection, note, amount) {
   const key = noteKey(note);
   if (!key) return null;
@@ -196,7 +203,7 @@ async function sharedRow(connection, note, amount) {
   try {
     r = await executeQuery(
       connection,
-      "SELECT category, source FROM category_map WHERE note_key = :note_key AND kind = :kind",
+      "SELECT category, source, updated_by, confidence FROM category_map WHERE note_key = :note_key AND kind = :kind",
       { note_key: key, kind: kindOf(amount) }
     );
   } catch (e) {
@@ -206,10 +213,13 @@ async function sharedRow(connection, note, amount) {
     throw e;
   }
   const row = r.rows[0];
-  return row && isValidFor(row[0], amount) ? { category: row[0], source: row[1] } : null;
+  if (!row || !isValidFor(row[0], amount)) return null;
+  return { category: row[0], source: row[1], pending: isPending(row[1], row[2], row[3]), confidence: row[3] };
 }
-const fromShared = async (connection, note, amount) =>
-  (await sharedRow(connection, note, amount))?.category || null;
+const fromShared = async (connection, note, amount) => {
+  const row = await sharedRow(connection, note, amount);
+  return row && !row.pending ? row.category : null;
+};
 
 // Decide the category of a record. Returns { category, source, note } where
 // note is the text to store (with a recognised #tag removed).
@@ -240,7 +250,11 @@ async function explain(connection, uname, rawNote, amount) {
     ? { step: "memory", category: await fromMemory(connection, uname, note, amount) }
     : { step: "memory", category: null, skipped: true });
   const shared = await sharedRow(connection, note, amount);
-  steps.push({ step: "shared", category: shared ? shared.category : null, source: shared ? shared.source : null });
+  if (shared && shared.pending) {
+    steps.push({ step: "shared", category: null, source: "ai", pending: { category: shared.category, confidence: shared.confidence } });
+  } else {
+    steps.push({ step: "shared", category: shared ? shared.category : null, source: shared ? shared.source : null });
+  }
   const kw = keywordMatch(note, amount);
   steps.push({ step: "keyword", category: kw ? kw.key : null, word: kw ? kw.word : null, field: kw ? kw.field : null });
   steps.push({ step: "fallback", category: fallbackFor(amount) });
@@ -316,6 +330,8 @@ function publicList() {
 }
 
 module.exports = {
+  AI_MIN_CONFIDENCE,
+  isPending,
   adminList,
   explain,
   kindOf,

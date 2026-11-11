@@ -326,7 +326,7 @@
   function renderMap() {
     const q = $("mapSearch").value.trim().toLowerCase();
     const src = $("mapSource").value;
-    const all = map.items.filter((it) => (!q || it.note_key.includes(q)) && (!src || it.source === src));
+    const all = map.items.filter((it) => (!q || it.note_key.includes(q)) && (!src || (src === "pending" ? it.pending : it.source === src)));
     $("mapCount").textContent = `${num.format(map.items.length)} รายการ`;
     const pages = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
     mapPageNo = Math.min(Math.max(mapPageNo, 1), pages);
@@ -362,9 +362,26 @@
       });
       const tdSel = el("td"); tdSel.append(sel);
       const tdSrc = el("td");
-      const badge = el("span", "src " + it.source, (SOURCE_TH[it.source] || it.source) + (it.source === "ai" && it.confidence != null ? ` ${Math.round(it.confidence * 100)}%` : ""));
-      if (it.model) badge.title = it.model;
+      const badge = el("span", "src " + it.source + (it.pending ? " pending" : ""), (it.pending ? "AI ไม่แน่ใจ" : SOURCE_TH[it.source] || it.source) + (it.source === "ai" && it.confidence != null ? ` ${Math.round(it.confidence * 100)}%` : ""));
+      if (it.model) badge.title = it.model + (it.auto ? " · ตอบเองตอนผู้ใช้บันทึก" : "");
       tdSrc.append(badge);
+      if (it.pending) {
+        const ok = el("button", "btn small", "ยืนยัน");
+        ok.type = "button";
+        ok.title = "ใช้หมวดนี้ (จะกลายเป็น admin)";
+        ok.addEventListener("click", async () => {
+          ok.disabled = true;
+          try {
+            await mapApi("PUT", null, { note: it.note_key, category: sel.value });
+            mapMsg(`ยืนยัน "${it.note_key}" → ${catLabel(sel.value)}`);
+            await loadMap();
+          } catch (e) {
+            mapMsg("ยืนยันไม่สำเร็จ: " + e.message, true);
+            ok.disabled = false;
+          }
+        });
+        tdSrc.append(" ", ok);
+      }
       const del = el("button", "btn small", "ลบ");
       del.type = "button";
       del.addEventListener("click", async () => {
@@ -429,6 +446,7 @@
       if (s.skipped) return "ไม่ได้เลือกผู้ใช้";
       return s.category ? `ผู้ใช้คนนี้เคยตั้ง "${r.note_key}" เป็น ${catText(s.category)}` : "ผู้ใช้คนนี้ไม่เคยตั้งหมวดของโน้ตนี้";
     }
+    if (s.step === "shared" && s.pending) return `AI ไม่แน่ใจ (${Math.round(s.pending.confidence * 100)}%) แนะนำ ${catText(s.pending.category)} — ยังไม่ใช้ รอ admin ยืนยันในตารางกลาง`;
     if (s.step === "shared") return s.category ? `"${r.note_key}" → ${catText(s.category)} (ที่มา: ${SOURCE_TH[s.source] || s.source})` : "ไม่มีโน้ตนี้ในตาราง (ต้องตรงทั้งข้อความ)";
     if (s.step === "keyword") return s.category ? `เจอคำว่า "${s.word}"${s.field === "places" ? " (ชื่อร้าน/สถานที่)" : ""} → ${catText(s.category)}` : "ไม่เจอคำที่รู้จัก";
     return catText(s.category);
@@ -447,7 +465,7 @@
     } else if (!s.category) {
       what.append(el("span", "err-text", AI_ERR[s.error] || s.message || "ถาม AI ไม่สำเร็จ"));
     } else {
-      what.append(`แนะนำ ${catText(s.category)} · มั่นใจ ${Math.round(s.confidence * 100)}%`, el("span", "note", `${s.model} · ยังไม่ได้ใช้ตอนบันทึกจริง เป็นแค่คำแนะนำ`));
+      what.append(`แนะนำ ${catText(s.category)} · มั่นใจ ${Math.round(s.confidence * 100)}%`, el("span", "note", `${s.model} · ลองดูเฉยๆ ยังไม่ได้บันทึก`));
       if (shared && shared.category && shared.source !== "ai") {
         what.append(el("span", "note", `มีในตารางกลางแล้ว (ที่มา: ${SOURCE_TH[shared.source] || shared.source}) — AI ไม่ทับ`));
       } else {

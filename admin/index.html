@@ -56,7 +56,7 @@
 
         <section class="card span2" id="guessCard">
           <div class="card-head"><h2>ลองเดาหมวด</h2><span class="muted">ไม่บันทึกอะไร</span></div>
-          <p class="muted help">ใส่โน้ตเพื่อดูว่าระบบจะได้หมวดอะไร มาจากขั้นไหน และแต่ละขั้นเจออะไร ลำดับ: #tag → ความจำของผู้ใช้ → ตารางหมวดกลาง → คำในโน้ต → อื่นๆ · กด "ถาม AI" เพื่อดูคำแนะนำจาก Gemini (ยังไม่ได้ใช้ตอนบันทึกจริง)</p>
+          <p class="muted help">ใส่โน้ตเพื่อดูว่าระบบจะได้หมวดอะไร มาจากขั้นไหน และแต่ละขั้นเจออะไร ลำดับ: #tag → ความจำของผู้ใช้ → ตารางหมวดกลาง → คำในโน้ต → AI → อื่นๆ · ตอนบันทึกจริง ถ้าขั้นอื่นหาไม่เจอ ระบบจะถาม AI เองหลังตอบผู้ใช้ (ครั้งเดียวต่อโน้ต ผลเก็บลงตารางกลาง ใช้เมื่อมั่นใจ ≥ 70%) · ปุ่ม "ถาม AI" ที่นี่ใช้ลองดูเฉยๆ ไม่บันทึกจนกว่าจะกดบันทึก</p>
           <form class="map-form" id="guessForm" autocomplete="off">
             <input id="guessNote" type="text" maxlength="200" placeholder="โน้ต เช่น กาแฟ starbucks" aria-label="โน้ตที่จะลอง" required>
             <select id="guessKind" aria-label="ประเภท">
@@ -77,7 +77,7 @@
 
         <section class="card span2" id="mapCard">
           <div class="card-head"><h2>ตารางหมวดกลาง (ใช้กับทุกคน)</h2><span class="muted" id="mapCount"></span></div>
-          <p class="muted help">ใช้เมื่อผู้ใช้ไม่ได้ตั้งหมวดของโน้ตนั้นเอง และมีผลก่อนการเดาจากคำในโน้ต โดยจับคู่กับโน้ตทั้งข้อความ (ไม่สนตัวพิมพ์เล็กใหญ่และช่องว่าง) มีผลกับรายการใหม่เท่านั้น รายการเก่าไม่เปลี่ยน · ที่มา: <b>admin</b> = เพิ่ม/แก้บนหน้านี้, <b>จากประวัติ</b> = โน้ตที่ใช้บ่อยในข้อมูลเดิม, <b>AI</b> = AI แนะนำ (แก้แล้วจะกลายเป็น admin)</p>
+          <p class="muted help">ใช้เมื่อผู้ใช้ไม่ได้ตั้งหมวดของโน้ตนั้นเอง และมีผลก่อนการเดาจากคำในโน้ต โดยจับคู่กับโน้ตทั้งข้อความ (ไม่สนตัวพิมพ์เล็กใหญ่และช่องว่าง) มีผลกับรายการใหม่เท่านั้น รายการเก่าไม่เปลี่ยน · ที่มา: <b>admin</b> = เพิ่ม/แก้บนหน้านี้, <b>จากประวัติ</b> = โน้ตที่ใช้บ่อยในข้อมูลเดิม, <b>AI</b> = AI แนะนำ (แก้แล้วจะกลายเป็น admin) · <b>AI ไม่แน่ใจ</b> = AI ตอบเองแต่มั่นใจไม่ถึง 70% ยังไม่ถูกใช้ จนกว่าจะกดยืนยันหรือเลือกหมวดใหม่</p>
           <form class="map-form" id="mapForm" autocomplete="off">
             <input id="mapNote" type="text" maxlength="200" placeholder="โน้ต เช่น hi-life" aria-label="โน้ต" required>
             <select id="mapCat" aria-label="หมวด" required></select>
@@ -90,6 +90,7 @@
               <option value="admin">admin</option>
               <option value="history">จากประวัติ</option>
               <option value="ai">AI</option>
+              <option value="pending">AI ไม่แน่ใจ (รอยืนยัน)</option>
             </select>
           </div>
           <div class="map-msg" id="mapMsg" role="status"></div>

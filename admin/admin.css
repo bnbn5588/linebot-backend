@@ -188,3 +188,4 @@ h2 { font-size: 14px; margin: 0; font-weight: 600; }
 .steps li.ai .mark { color: var(--warning); }
 .steps li.ai .what .btn { margin-right: 8px; }
 .steps .err-text { color: var(--critical); }
+.src.pending { border-color: var(--warning); border-style: dashed; color: var(--text-primary); }
