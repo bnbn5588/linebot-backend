@@ -116,6 +116,30 @@
           <div class="rules" id="rulesList"></div>
         </section>
 
+        <section class="card span2" id="aiCard">
+          <div class="card-head"><h2>Gemini (AI จัดหมวด)</h2><span class="muted" id="aiModel"></span></div>
+          <p class="help muted">นับเฉพาะการเรียกจากระบบนี้ วันใหม่เริ่มเวลา UTC 00:00 (07:00 ไทย · 08:00 ไต้หวัน) โควต้าจริงของ Google free tier ดูที่ <a href="https://aistudio.google.com/usage" target="_blank" rel="noopener">AI Studio Usage</a></p>
+          <p class="muted" id="aiNoTable" hidden>ยังไม่มีตารางนับการใช้ (migration 004)</p>
+          <div id="aiBody">
+            <div class="tiles">
+              <div class="tile"><div class="tile-label">คำขอวันนี้</div><div class="tile-value" id="aiToday">–</div><div class="tile-sub" id="aiTodaySub"></div></div>
+              <div class="tile"><div class="tile-label">คำขอ 30 วัน</div><div class="tile-value" id="ai30">–</div><div class="tile-sub" id="ai30Sub"></div></div>
+              <div class="tile"><div class="tile-label">สำเร็จ (30 วัน)</div><div class="tile-value" id="aiOk">–</div><div class="tile-sub" id="aiOkSub"></div></div>
+              <div class="tile"><div class="tile-label">เวลาเฉลี่ยต่อคำถาม</div><div class="tile-value" id="aiMs">–</div><div class="tile-sub">รวม retry</div></div>
+            </div>
+            <div class="card-head sub"><h2>คำขอต่อวัน (30 วัน)</h2><span class="muted">คำขอ = HTTP request ที่ส่งไป Gemini รวม retry</span></div>
+            <div class="chart" id="aiChart"></div>
+            <div class="tooltip" id="aiTooltip" role="status" hidden></div>
+            <div class="scroll">
+              <table class="t compact">
+                <thead><tr><th>ผล</th><th>จาก</th><th>คำถาม</th><th>คำขอ</th><th>เวลาเฉลี่ย</th></tr></thead>
+                <tbody id="aiTable"></tbody>
+              </table>
+            </div>
+          </div>
+          <dl class="kv" id="aiKv"></dl>
+        </section>
+
         <section class="card">
           <div class="card-head"><h2>ฐานข้อมูล</h2><span class="muted" id="dbVersion"></span></div>
           <div class="meter" id="dbMeter"></div>
@@ -143,6 +167,7 @@
             <li><a href="https://console.firebase.google.com/project/linebot-63dfd/usage" target="_blank" rel="noopener">Firebase Usage</a><span class="muted">Cloud Functions invocations / compute</span></li>
             <li><a href="https://console.cloud.google.com/apis/api/places-backend.googleapis.com/quotas?project=linebot-63dfd" target="_blank" rel="noopener">Google Places API quotas</a><span class="muted">Restaurant picker</span></li>
             <li><a href="https://console.cloud.google.com/billing" target="_blank" rel="noopener">Google Cloud Billing</a><span class="muted">ค่าใช้จ่าย Firebase + Places</span></li>
+            <li><a href="https://aistudio.google.com/usage" target="_blank" rel="noopener">Google AI Studio Usage</a><span class="muted">Gemini requests / quota (free tier)</span></li>
             <li><a href="https://cloud.oracle.com/db/adbs" target="_blank" rel="noopener">Oracle Autonomous DB</a><span class="muted">Storage / OCPU ของทั้ง DB</span></li>
             <li><a href="https://manager.line.biz/" target="_blank" rel="noopener">LINE Official Account Manager</a><span class="muted">แพ็กเกจข้อความ, สถิติ</span></li>
           </ul>

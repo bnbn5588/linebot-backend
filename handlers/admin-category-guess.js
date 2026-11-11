@@ -3,6 +3,7 @@ const { adminAuth } = require("../components/adminAuth");
 const { adminCors } = require("../components/adminCors");
 const { explain, describe } = require("../components/categories");
 const ai = require("../components/ai");
+const { recordUsage } = require("../components/aiUsage");
 
 // /api/admin-category-guess — "what category would this note get, and why?"
 //   GET ?note=&kind=expense|income[&uname=][&ai=1]
@@ -32,10 +33,12 @@ async function guess(req, res, connection) {
     else {
       try {
         const s = await ai.suggestCategory(r.note_key, r.kind);
+        await recordUsage(connection, "admin", s);
         step = { step: "ai", category: s.category, confidence: s.confidence, model: s.model };
       } catch (e) {
         if (!(e instanceof ai.AiError)) throw e;
         console.error("Gemini:", e.code, e.message);
+        await recordUsage(connection, "admin", e);
         step = { step: "ai", category: null, error: e.code, message: e.message };
       }
     }

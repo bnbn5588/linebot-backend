@@ -5,6 +5,10 @@ const {
 } = require("../components/db");
 const { adminAuth } = require("../components/adminAuth");
 const { adminCors } = require("../components/adminCors");
+const ai = require("../components/ai");
+const { usageSummary } = require("../components/aiUsage");
+const { DAILY_CAP } = require("../components/aiFill");
+const { AI_MIN_CONFIDENCE } = require("../components/categories");
 
 // GET /api/admin-overview — data for the admin website (a separate site/domain).
 // Auth: LINE ID token of an admin (components/adminAuth.js), CORS limited to
@@ -153,6 +157,19 @@ module.exports = async (req, res) => {
       const [[version]] = await rows(connection, "SELECT version_full FROM product_component_version");
       const [[dbTime]] = await rows(connection, "SELECT TO_CHAR(SYSTIMESTAMP, 'YYYY-MM-DD\"T\"HH24:MI:SS TZH:TZM') FROM dual");
 
+      // Gemini: calls per day (AI_USAGE, null before migration 004) and what
+      // its answers became in the shared table.
+      const aiUsage = await usageSummary(connection, 30);
+      const [aiRows] = await rows(
+        connection,
+        `SELECT count(CASE WHEN updated_by = 'auto' AND confidence >= :min THEN 1 END),
+                count(CASE WHEN updated_by = 'auto' AND (confidence < :min OR confidence IS NULL) THEN 1 END),
+                count(CASE WHEN updated_by <> 'auto' THEN 1 END),
+                count(CASE WHEN updated_by = 'auto' AND updated_at >= TRUNC(SYSDATE) THEN 1 END)
+           FROM category_map WHERE source = 'ai'`,
+        { min: AI_MIN_CONFIDENCE }
+      );
+
       const userIds = users.map((u) => u[0]);
       const line = await lineInfo(userIds);
 
@@ -201,6 +218,14 @@ module.exports = async (req, res) => {
             memory_mb: Math.round(process.memoryUsage().rss / 1048576),
           },
           line: { ...line, names: undefined },
+          ai: {
+            enabled: ai.enabled(),
+            model: ai.model(),
+            daily_cap: DAILY_CAP,
+            min_confidence: AI_MIN_CONFIDENCE,
+            usage: aiUsage, // [{ date, origin, outcome, calls, attempts, ms_total }] or null
+            answers: { used: aiRows[0], pending: aiRows[1], confirmed: aiRows[2], auto_today: aiRows[3] },
+          },
         },
       });
     } catch (error) {

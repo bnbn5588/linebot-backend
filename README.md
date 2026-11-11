@@ -164,6 +164,11 @@ Google Cloud, OCI and LINE consoles.
   the shared table; below that the row is "AI ไม่แน่ใจ" (pending, not used,
   not asked again) until an admin confirms it on the admin site. Gemini
   errors store nothing, so the next record retries.
+- Gemini usage (card "Gemini (AI จัดหมวด)" on the admin site, `ai` in
+  `/api/admin-overview`): every Gemini question — automatic and "ถาม AI" — adds
+  to a per-day counter in `AI_USAGE` (migration 004; origin, outcome, questions,
+  HTTP requests incl. retries, total ms; no notes or user ids). Days are UTC.
+  Google's own free-tier quota is shown in AI Studio, not here.
 - Seed from existing records: `node scripts/seed-category-map.js [--min=5]
   [--share=0.6] [--apply]` — notes used at least `min` times get their most
   common category (skipping "other" and notes whose records disagree); existing

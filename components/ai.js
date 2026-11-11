@@ -56,10 +56,12 @@ async function suggestCategory(note, kind, { budgetMs = BUDGET_MS } = {}) {
   for (let attempt = 0; ; attempt++) {
     const left = budgetMs - (Date.now() - start);
     try {
-      return await askOnce(note, kind, Math.max(1000, Math.min(TIMEOUT_MS, left)));
+      const r = await askOnce(note, kind, Math.max(1000, Math.min(TIMEOUT_MS, left)));
+      return Object.assign(r, { attempts: attempt + 1, ms: Date.now() - start });
     } catch (e) {
       const delay = RETRY_DELAYS_MS[attempt];
       const elapsed = Date.now() - start;
+      if (e instanceof AiError) Object.assign(e, { attempts: attempt + 1, ms: elapsed }); // for usage stats
       if (!(e instanceof AiError) || !e.retryable || delay === undefined || elapsed + delay + 1500 > budgetMs) throw e;
       await sleep(delay);
     }

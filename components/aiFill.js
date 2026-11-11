@@ -1,6 +1,7 @@
 const { executeQuery, getConnection, closeConnection } = require("./db");
 const { noteKey, kindOf, fallbackFor, AI_MIN_CONFIDENCE } = require("./categories");
 const ai = require("./ai");
+const { recordUsage } = require("./aiUsage");
 
 // After a record was saved as "other" (no step found a category): ask Gemini
 // once per note and remember the answer in the shared table (source 'ai',
@@ -59,10 +60,12 @@ async function aiFill({ uname, id, note, amount }) {
     } catch (e) {
       if (!(e instanceof ai.AiError)) throw e;
       console.error("aiFill Gemini:", e.code, e.message);
+      await withConnection((connection) => recordUsage(connection, "auto", e));
       return { skipped: e.code, message: e.message };
     }
 
     return await withConnection(async (connection) => {
+      await recordUsage(connection, "auto", s);
       await executeQuery(
         connection,
         `MERGE INTO category_map m
@@ -90,4 +93,4 @@ async function aiFill({ uname, id, note, amount }) {
   }
 }
 
-module.exports = { aiFill };
+module.exports = { aiFill, DAILY_CAP };

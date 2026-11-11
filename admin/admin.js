@@ -94,6 +94,7 @@
       try { sessionStorage.removeItem("reauth"); } catch { /* ignore */ }
       data = j.data;
       render();
+      renderAi();
       $("status").hidden = true;
       $("view").hidden = false;
       renderChart();
@@ -211,28 +212,37 @@
     }));
   }
 
-  // 60-day bar chart: one series (records/day), so no legend; hover for details
-  function renderChart() {
-    const box = $("chart");
-    const byDate = new Map(data.daily.map((d) => [d.date, d]));
-    const days = [];
+  // Bar charts: one series each (no legend); hover a day for details.
+  function lastDays(n, list, empty) {
+    const byDate = new Map(list.map((d) => [d.date, d]));
     const end = new Date(data.generated_at);
-    for (let i = 59; i >= 0; i--) {
+    const days = [];
+    for (let i = n - 1; i >= 0; i--) {
       const d = new Date(end.getTime() - i * 864e5).toISOString().slice(0, 10);
-      days.push(byDate.get(d) || { date: d, records: 0, users: 0 });
+      days.push(byDate.get(d) || Object.assign({ date: d }, empty));
     }
+    return days;
+  }
+  function renderChart() {
+    barChart("chart", "tooltip", lastDays(60, data.daily, { records: 0, users: 0 }), "records",
+      (d) => [["รายการ", num.format(d.records)], ["ผู้ใช้", num.format(d.users)]], "จำนวนรายการต่อวัน 60 วันล่าสุด");
+    if (aiDays) barChart("aiChart", "aiTooltip", aiDays, "attempts", aiTip, "คำขอ Gemini ต่อวัน 30 วันล่าสุด");
+  }
+  function barChart(boxId, tipId, days, key, tipRows, label) {
+    const box = $(boxId);
     const W = Math.max(box.clientWidth || 600, 280);
     const H = 180;
     const pad = { l: 34, r: 4, t: 10, b: 22 };
     const iw = W - pad.l - pad.r;
     const ih = H - pad.t - pad.b;
-    const max = Math.max(1, ...days.map((d) => d.records));
+    const max = Math.max(1, ...days.map((d) => d[key]));
     const step = niceStep(max / 3);
     const top = Math.ceil(max / step) * step;
     const y = (v) => pad.t + ih - (v / top) * ih;
     const band = iw / days.length;
     const bw = Math.max(band - 2, 1); // 2px gap between bars
-    const s = svg("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "จำนวนรายการต่อวัน 60 วันล่าสุด" });
+    const every = days.length > 40 ? 14 : 7;
+    const s = svg("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": label });
     for (let v = step; v <= top; v += step) {
       const yy = Math.round(y(v)) + 0.5;
       s.append(svg("line", { x1: pad.l, x2: W - pad.r, y1: yy, y2: yy, class: "grid-l" }));
@@ -243,35 +253,94 @@
     const base = Math.round(y(0)) + 0.5;
     days.forEach((d, i) => {
       const x = pad.l + band * i + 1;
-      if (d.records > 0) {
-        const yv = y(d.records);
+      if (d[key] > 0) {
+        const yv = y(d[key]);
         const h = base - yv;
         const r = Math.min(4, h, bw / 2);
         s.append(svg("path", { class: "bar", d: `M${x},${base} V${yv + r} Q${x},${yv} ${x + r},${yv} H${x + bw - r} Q${x + bw},${yv} ${x + bw},${yv + r} V${base} Z` }));
       }
-      if (i % 14 === 59 % 14) {
-        const t = svg("text", { x: x + bw / 2, y: H - 6, "text-anchor": "middle", class: "axis" });
+      if (i % every === (days.length - 1) % every) {
+        const last = i === days.length - 1; // keep the last label inside the chart
+        const t = svg("text", { x: last ? x + bw : x + bw / 2, y: H - 6, "text-anchor": last ? "end" : "middle", class: "axis" });
         const [, m, dd] = d.date.split("-");
         t.textContent = `${Number(dd)}/${Number(m)}`;
         s.append(t);
       }
       const hit = svg("rect", { x: pad.l + band * i, y: pad.t, width: band, height: ih, class: "hit" });
-      hit.addEventListener("pointerenter", () => tip(d, (x + bw / 2) / W));
-      hit.addEventListener("pointerleave", () => { $("tooltip").hidden = true; });
+      hit.addEventListener("pointerenter", () => tip(tipId, boxId, d, tipRows(d), (x + bw / 2) / W));
+      hit.addEventListener("pointerleave", () => { $(tipId).hidden = true; });
       s.append(hit);
     });
     s.append(svg("line", { x1: pad.l, x2: W - pad.r, y1: base, y2: base, class: "base" }));
     box.replaceChildren(s);
   }
-  function tip(d, frac) {
-    const t = $("tooltip");
+  function tip(tipId, boxId, d, rows, frac) {
+    const t = $(tipId);
     const row = (k, v) => { const r = el("div", "r"); r.append(el("span", "", k), el("span", "", v)); return r; };
-    t.replaceChildren(el("b", "", new Date(d.date + "T00:00:00").toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" })), row("รายการ", num.format(d.records)), row("ผู้ใช้", num.format(d.users)));
+    t.replaceChildren(el("b", "", new Date(d.date + "T00:00:00").toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" })), ...rows.map(([k, v]) => row(k, v)));
     t.hidden = false;
     const card = t.parentElement.getBoundingClientRect();
-    const ch = $("chart").getBoundingClientRect();
+    const ch = $(boxId).getBoundingClientRect();
     t.style.left = Math.min(Math.max(ch.left - card.left + frac * ch.width - t.offsetWidth / 2, 8), card.width - t.offsetWidth - 8) + "px";
     t.style.top = (ch.top - card.top - 8) + "px";
+  }
+
+  // ---- Gemini usage (data.ai; usage rows come from table AI_USAGE)
+  let aiDays = null;
+  const OUTCOME_TH = { ok: "สำเร็จ", QUOTA: "เกินโควต้า (429)", BUSY: "Gemini ไม่ว่าง (5xx)", NETWORK: "ติดต่อไม่ได้/หมดเวลา", HTTP: "HTTP error อื่น", BAD_RESPONSE: "คำตอบผิดรูปแบบ" };
+  const ORIGIN_TH = { auto: "อัตโนมัติ (ตอนบันทึก)", admin: "ถาม AI (admin)" };
+  function aiTip(d) {
+    const rows = [["คำขอ (รวม retry)", num.format(d.attempts)], ["คำถาม", num.format(d.calls)], ["สำเร็จ", num.format(d.ok)]];
+    if (d.calls - d.ok) rows.push(["ล้มเหลว", num.format(d.calls - d.ok)]);
+    return rows;
+  }
+  function renderAi() {
+    const a = data.ai;
+    if (!a) { $("aiCard").hidden = true; return; }
+    const pct = (x) => (x * 100).toFixed(0) + "%";
+    const u = a.usage;
+    $("aiModel").textContent = a.model + (a.enabled ? "" : " · ยังไม่ได้ตั้ง GEMINI_API_KEY");
+    $("aiNoTable").hidden = !!u;
+    $("aiBody").hidden = !u;
+    const ans = a.answers;
+    const kvRows = [
+      ["คำตอบในตารางกลาง", `ใช้แล้ว ${num.format(ans.used)} · AI ไม่แน่ใจ ${num.format(ans.pending)} · admin บันทึกจาก "ถาม AI" ${num.format(ans.confirmed)}`],
+      ["เพดานอัตโนมัติวันนี้", `${num.format(ans.auto_today)} / ${num.format(a.daily_cap)} โน้ตใหม่ (AI_DAILY_CAP)`],
+      ["ใช้คำตอบเมื่อมั่นใจ", "≥ " + pct(a.min_confidence)],
+    ];
+    $("aiKv").replaceChildren(...kvRows.flatMap(([k, v]) => [el("dt", "", k), el("dd", "", v)]));
+    if (!u) { aiDays = null; return; }
+    const byDay = new Map();
+    for (const r of u) {
+      const d = byDay.get(r.date) || { date: r.date, calls: 0, attempts: 0, ok: 0, ms: 0 };
+      d.calls += r.calls; d.attempts += r.attempts; d.ms += r.ms_total;
+      if (r.outcome === "ok") d.ok += r.calls;
+      byDay.set(r.date, d);
+    }
+    aiDays = lastDays(30, [...byDay.values()], { calls: 0, attempts: 0, ok: 0, ms: 0 });
+    const today = aiDays[aiDays.length - 1];
+    const sum = (k) => aiDays.reduce((t, d) => t + d[k], 0);
+    const calls = sum("calls"), ok = sum("ok"), attempts = sum("attempts"), ms = sum("ms");
+    $("aiToday").textContent = num.format(today.attempts);
+    $("aiTodaySub").textContent = `${num.format(today.calls)} คำถาม · สำเร็จ ${num.format(today.ok)}`;
+    $("ai30").textContent = num.format(attempts);
+    $("ai30Sub").textContent = `${num.format(calls)} คำถาม`;
+    $("aiOk").textContent = calls ? pct(ok / calls) : "–";
+    $("aiOkSub").textContent = calls ? `ล้มเหลว ${num.format(calls - ok)} คำถาม` : "ยังไม่มีการใช้";
+    $("aiMs").textContent = calls ? (ms / calls / 1000).toFixed(1) + " วิ" : "–";
+    const groups = new Map();
+    for (const r of u) {
+      const k = r.origin + "\t" + r.outcome;
+      const g = groups.get(k) || { origin: r.origin, outcome: r.outcome, calls: 0, attempts: 0, ms: 0 };
+      g.calls += r.calls; g.attempts += r.attempts; g.ms += r.ms_total;
+      groups.set(k, g);
+    }
+    const list = [...groups.values()].sort((x, y) => y.calls - x.calls);
+    $("aiTable").replaceChildren(...(list.length ? list.map((g) => {
+      const tr = el("tr");
+      tr.append(el("td", "", OUTCOME_TH[g.outcome] || g.outcome), el("td", "", ORIGIN_TH[g.origin] || g.origin), el("td", "", num.format(g.calls)), el("td", "", num.format(g.attempts)), el("td", "", (g.ms / g.calls / 1000).toFixed(1) + " วิ"));
+      return tr;
+    }) : [(() => { const tr = el("tr", "empty"); const td = el("td", "", "ยังไม่มีการเรียก Gemini ใน 30 วัน"); td.colSpan = 5; tr.append(td); return tr; })()]));
   }
   function niceStep(raw) {
     const p = Math.pow(10, Math.floor(Math.log10(raw || 1)));
