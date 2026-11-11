@@ -7,6 +7,7 @@ const { adminAuth } = require("../components/adminAuth");
 const { adminCors } = require("../components/adminCors");
 const ai = require("../components/ai");
 const { usageSummary } = require("../components/aiUsage");
+const { TH_TODAY, TH_TODAY_START_UTC } = require("../components/thaiTime");
 const { DAILY_CAP } = require("../components/aiFill");
 const { AI_MIN_CONFIDENCE } = require("../components/categories");
 
@@ -93,10 +94,10 @@ module.exports = async (req, res) => {
         `SELECT (SELECT count(*) FROM users),
                 (SELECT count(*) FROM wallet),
                 (SELECT count(*) FROM expense),
-                (SELECT count(*) FROM expense WHERE fulldate >= TRUNC(SYSDATE) - 6),
-                (SELECT count(*) FROM expense WHERE fulldate >= TRUNC(SYSDATE) - 29),
-                (SELECT count(DISTINCT uname) FROM expense WHERE fulldate >= TRUNC(SYSDATE) - 6),
-                (SELECT count(DISTINCT uname) FROM expense WHERE fulldate >= TRUNC(SYSDATE) - 29)
+                (SELECT count(*) FROM expense WHERE fulldate >= ${TH_TODAY} - 6),
+                (SELECT count(*) FROM expense WHERE fulldate >= ${TH_TODAY} - 29),
+                (SELECT count(DISTINCT uname) FROM expense WHERE fulldate >= ${TH_TODAY} - 6),
+                (SELECT count(DISTINCT uname) FROM expense WHERE fulldate >= ${TH_TODAY} - 29)
            FROM dual`
       );
 
@@ -114,7 +115,7 @@ module.exports = async (req, res) => {
            FROM (SELECT uname, count(*) AS wallets FROM wallet GROUP BY uname) w
            LEFT JOIN (SELECT uname,
                              count(*) AS records,
-                             count(CASE WHEN fulldate >= TRUNC(SYSDATE) - 29 THEN 1 END) AS records_30d,
+                             count(CASE WHEN fulldate >= ${TH_TODAY} - 29 THEN 1 END) AS records_30d,
                              min(fulldate) AS first_date,
                              max(fulldate) AS last_date,
                              max(trans_id) AS max_id
@@ -127,7 +128,7 @@ module.exports = async (req, res) => {
         connection,
         `SELECT TO_CHAR(TRUNC(fulldate), 'YYYY-MM-DD'), count(*), count(DISTINCT uname)
            FROM expense
-          WHERE fulldate >= TRUNC(SYSDATE) - 59 AND fulldate < TRUNC(SYSDATE) + 1
+          WHERE fulldate >= ${TH_TODAY} - 59 AND fulldate < ${TH_TODAY} + 1
           GROUP BY TRUNC(fulldate)
           ORDER BY 1`
       );
@@ -155,7 +156,7 @@ module.exports = async (req, res) => {
         "SELECT table_name, num_rows, TO_CHAR(last_analyzed, 'YYYY-MM-DD') FROM user_tables ORDER BY table_name"
       );
       const [[version]] = await rows(connection, "SELECT version_full FROM product_component_version");
-      const [[dbTime]] = await rows(connection, "SELECT TO_CHAR(SYSTIMESTAMP, 'YYYY-MM-DD\"T\"HH24:MI:SS TZH:TZM') FROM dual");
+      const [[dbTime]] = await rows(connection, "SELECT TO_CHAR(SYSTIMESTAMP AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM-DD HH24:MI:SS') || ' (ไทย)' FROM dual");
 
       // Gemini: calls per day (AI_USAGE, null before migration 004) and what
       // its answers became in the shared table.
@@ -165,7 +166,7 @@ module.exports = async (req, res) => {
         `SELECT count(CASE WHEN updated_by = 'auto' AND confidence >= :min THEN 1 END),
                 count(CASE WHEN updated_by = 'auto' AND (confidence < :min OR confidence IS NULL) THEN 1 END),
                 count(CASE WHEN updated_by <> 'auto' THEN 1 END),
-                count(CASE WHEN updated_by = 'auto' AND updated_at >= TRUNC(SYSDATE) THEN 1 END)
+                count(CASE WHEN updated_by = 'auto' AND updated_at >= ${TH_TODAY_START_UTC} THEN 1 END)
            FROM category_map WHERE source = 'ai'`,
         { min: AI_MIN_CONFIDENCE }
       );

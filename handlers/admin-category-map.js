@@ -5,6 +5,7 @@ const {
 } = require("../components/db");
 const { adminAuth } = require("../components/adminAuth");
 const { adminCors } = require("../components/adminCors");
+const { thai } = require("../components/thaiTime");
 const { NOTE_KEY_SQL, CATEGORIES, noteKey, publicList, adminList, isPending } = require("../components/categories");
 
 // /api/admin-category-map — the shared note → category mapping used for
@@ -30,7 +31,7 @@ function bad(res, message) {
 async function list(req, res, connection) {
   const r = await executeQuery(
     connection,
-    `SELECT m.note_key, m.kind, m.category, m.source, TO_CHAR(m.updated_at, 'YYYY-MM-DD HH24:MI'), NVL(e.cnt, 0), m.confidence, m.model, m.updated_by
+    `SELECT m.note_key, m.kind, m.category, m.source, TO_CHAR(${thai("m.updated_at")}, 'YYYY-MM-DD HH24:MI'), NVL(e.cnt, 0), m.confidence, m.model, m.updated_by
        FROM category_map m
        LEFT JOIN (SELECT ${NOTE_KEY_SQL} AS note_key,
                          CASE WHEN exvalue > 0 THEN 'income' ELSE 'expense' END AS kind,

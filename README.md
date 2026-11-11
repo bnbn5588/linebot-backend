@@ -167,7 +167,7 @@ Google Cloud, OCI and LINE consoles.
 - Gemini usage (card "Gemini (AI จัดหมวด)" on the admin site, `ai` in
   `/api/admin-overview`): every Gemini question — automatic and "ถาม AI" — adds
   to a per-day counter in `AI_USAGE` (migration 004; origin, outcome, questions,
-  HTTP requests incl. retries, total ms; no notes or user ids). Days are UTC.
+  HTTP requests incl. retries, total ms; no notes or user ids). Days are Thai days.
   Google's own free-tier quota is shown in AI Studio, not here.
 - Seed from existing records: `node scripts/seed-category-map.js [--min=5]
   [--share=0.6] [--apply]` — notes used at least `min` times get their most
@@ -175,6 +175,12 @@ Google Cloud, OCI and LINE consoles.
   rows are never changed. Dry run by default.
 - Login: a second LIFF app in the same LINE Login channel, endpoint = the admin
   site URL; its LIFF ID goes in `admin/config.js`.
+
+- Times: the admin site and API show Thai time (Asia/Bangkok). The DB clock
+  is UTC, so `updated_at` columns hold UTC and are converted when read
+  (`components/thaiTime.js`); "today" (AI cap, usage, 7/30-day counts) is the
+  Thai day. Record dates (`EXPENSE.fulldate`) are the wallet's local time as
+  entered and are shown as they are.
 
 ## Requirements
 

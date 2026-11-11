@@ -8,6 +8,9 @@
   let apiBase = cfg.apiBase;
   let token = null;
   let data = null;
+  // Everything is shown in Thai time, wherever the admin is.
+  const TZ = "Asia/Bangkok";
+  const thaiDate = (iso) => new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso));
 
   const el = (tag, cls, text) => {
     const e = document.createElement(tag);
@@ -109,7 +112,7 @@
 
   function render() {
     const c = data.counts;
-    $("updated").textContent = "อัปเดต " + new Date(data.generated_at).toLocaleString("th-TH");
+    $("updated").textContent = "อัปเดต " + new Date(data.generated_at).toLocaleString("th-TH", { timeZone: TZ }) + " (เวลาไทย)";
     $("kUsers").textContent = num.format(c.users);
     $("kWallets").textContent = `${num.format(c.wallets)} กระเป๋า`;
     $("kActive7").textContent = num.format(c.active_users_7d);
@@ -215,7 +218,7 @@
   // Bar charts: one series each (no legend); hover a day for details.
   function lastDays(n, list, empty) {
     const byDate = new Map(list.map((d) => [d.date, d]));
-    const end = new Date(data.generated_at);
+    const end = new Date(thaiDate(data.generated_at) + "T00:00:00Z"); // today in Thailand
     const days = [];
     for (let i = n - 1; i >= 0; i--) {
       const d = new Date(end.getTime() - i * 864e5).toISOString().slice(0, 10);

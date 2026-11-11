@@ -1,4 +1,5 @@
 const { executeQuery } = require("./db");
+const { TH_TODAY } = require("./thaiTime");
 
 // Count Gemini calls per day (table AI_USAGE, migration 004) for the admin
 // site. Counters only: no note text, no user ids. Never fails the caller —
@@ -11,7 +12,7 @@ async function recordUsage(connection, origin, r) {
     await executeQuery(
       connection,
       `MERGE INTO ai_usage u
-       USING (SELECT TRUNC(SYSDATE) AS day, :origin AS origin, :outcome AS outcome FROM dual) s
+       USING (SELECT ${TH_TODAY} AS day, :origin AS origin, :outcome AS outcome FROM dual) s
           ON (u.day = s.day AND u.origin = s.origin AND u.outcome = s.outcome)
         WHEN MATCHED THEN UPDATE SET calls = u.calls + 1, attempts = u.attempts + :attempts, ms_total = u.ms_total + :ms
         WHEN NOT MATCHED THEN INSERT (day, origin, outcome, calls, attempts, ms_total)
@@ -30,7 +31,7 @@ async function usageSummary(connection, days = 30) {
     const r = await executeQuery(
       connection,
       `SELECT TO_CHAR(day, 'YYYY-MM-DD'), origin, outcome, calls, attempts, ms_total
-         FROM ai_usage WHERE day >= TRUNC(SYSDATE) - :back ORDER BY day`,
+         FROM ai_usage WHERE day >= ${TH_TODAY} - :back ORDER BY day`,
       { back: days - 1 }
     );
     return r.rows.map((x) => ({ date: x[0], origin: x[1], outcome: x[2], calls: x[3], attempts: x[4], ms_total: x[5] }));

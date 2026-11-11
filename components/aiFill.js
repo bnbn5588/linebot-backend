@@ -1,6 +1,7 @@
 const { executeQuery, getConnection, closeConnection } = require("./db");
 const { noteKey, kindOf, fallbackFor, AI_MIN_CONFIDENCE } = require("./categories");
 const ai = require("./ai");
+const { TH_TODAY_START_UTC } = require("./thaiTime");
 const { recordUsage } = require("./aiUsage");
 
 // After a record was saved as "other" (no step found a category): ask Gemini
@@ -43,7 +44,7 @@ async function aiFill({ uname, id, note, amount }) {
       if (existing.rows.length) return { skipped: "KNOWN" };
       const today = await executeQuery(
         connection,
-        "SELECT count(*) FROM category_map WHERE updated_by = 'auto' AND updated_at >= TRUNC(SYSDATE)",
+        `SELECT count(*) FROM category_map WHERE updated_by = 'auto' AND updated_at >= ${TH_TODAY_START_UTC}`, // per Thai day
         []
       );
       if (today.rows[0][0] >= DAILY_CAP) {

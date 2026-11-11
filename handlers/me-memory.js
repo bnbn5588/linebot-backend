@@ -4,6 +4,7 @@ const {
   closeConnection,
 } = require("../components/db");
 const { lineAuth } = require("../components/lineAuth");
+const { thai } = require("../components/thaiTime");
 const { NOTE_KEY_SQL, CATEGORIES, describe, remember } = require("../components/categories");
 
 // /api/me-memory — the notes whose category the signed-in user has taught.
@@ -22,7 +23,7 @@ const validKey = (k) => typeof k === "string" && k.trim() !== "" && Buffer.byteL
 async function list(req, res, connection, uname) {
   const r = await executeQuery(
     connection,
-    `SELECT m.note_key, m.category, TO_CHAR(m.updated_at, 'YYYY-MM-DD'), NVL(e.cnt, 0)
+    `SELECT m.note_key, m.category, TO_CHAR(${thai("m.updated_at")}, 'YYYY-MM-DD'), NVL(e.cnt, 0)
        FROM category_memory m
        LEFT JOIN (SELECT ${NOTE_KEY_SQL} AS note_key, count(*) AS cnt
                     FROM expense WHERE uname = :uname
