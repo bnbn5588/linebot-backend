@@ -144,9 +144,14 @@ Google Cloud, OCI and LINE consoles.
   migration `scripts/migrations/002-category-map.sql`): note → category for
   every user, matched on the whole note (lower-case, single spaces). Order when a
   record is saved: `#tag` > the user's own memory > shared table > keywords >
-  other. Rows have a source (`admin`, or `ai` for future AI suggestions; saving
-  a row on the admin site makes it `admin`). Only new records are affected;
-  `scripts/backfill-categories.js` also uses the table.
+  other. Rows have a source (`admin`, `ai` for future AI suggestions; saving
+  a row on the admin site makes it `admin`, `history` = seeded from existing
+  records). Only new records are affected; `scripts/backfill-categories.js`
+  also uses the table.
+- Seed from existing records: `node scripts/seed-category-map.js [--min=5]
+  [--share=0.6] [--apply]` — notes used at least `min` times get their most
+  common category (skipping "other" and notes whose records disagree); existing
+  rows are never changed. Dry run by default.
 - Login: a second LIFF app in the same LINE Login channel, endpoint = the admin
   site URL; its LIFF ID goes in `admin/config.js`.
 

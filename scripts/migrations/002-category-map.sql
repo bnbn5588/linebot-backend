@@ -1,5 +1,6 @@
 -- 002: shared note → category mapping for ALL users (edited on the admin site,
--- later also filled by AI suggestions). Used after the user's own memory and
+-- seeded from existing records (source 'history') and later filled by AI
+-- suggestions (source 'ai')). Used after the user's own memory and
 -- before keyword guessing. New table only; no existing row is changed.
 CREATE TABLE category_map (
   note_key    VARCHAR2(250) NOT NULL,
@@ -10,5 +11,5 @@ CREATE TABLE category_map (
   updated_by  VARCHAR2(150),
   CONSTRAINT category_map_pk PRIMARY KEY (note_key, kind),
   CONSTRAINT category_map_kind_ck CHECK (kind IN ('expense', 'income')),
-  CONSTRAINT category_map_source_ck CHECK (source IN ('admin', 'ai'))
+  CONSTRAINT category_map_source_ck CHECK (source IN ('admin', 'ai', 'history'))
 )

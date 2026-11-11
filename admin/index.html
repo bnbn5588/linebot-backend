@@ -56,7 +56,7 @@
 
         <section class="card span2" id="mapCard">
           <div class="card-head"><h2>ตารางหมวดกลาง (ใช้กับทุกคน)</h2><span class="muted" id="mapCount"></span></div>
-          <p class="muted help">ใช้เมื่อผู้ใช้ไม่ได้ตั้งหมวดของโน้ตนั้นเอง และมีผลก่อนการเดาจากคำในโน้ต โดยจับคู่กับโน้ตทั้งข้อความ (ไม่สนตัวพิมพ์เล็กใหญ่และช่องว่าง) มีผลกับรายการใหม่เท่านั้น รายการเก่าไม่เปลี่ยน</p>
+          <p class="muted help">ใช้เมื่อผู้ใช้ไม่ได้ตั้งหมวดของโน้ตนั้นเอง และมีผลก่อนการเดาจากคำในโน้ต โดยจับคู่กับโน้ตทั้งข้อความ (ไม่สนตัวพิมพ์เล็กใหญ่และช่องว่าง) มีผลกับรายการใหม่เท่านั้น รายการเก่าไม่เปลี่ยน · ที่มา: <b>admin</b> = เพิ่ม/แก้บนหน้านี้, <b>จากประวัติ</b> = โน้ตที่ใช้บ่อยในข้อมูลเดิม, <b>AI</b> = AI แนะนำ (แก้แล้วจะกลายเป็น admin)</p>
           <form class="map-form" id="mapForm" autocomplete="off">
             <input id="mapNote" type="text" maxlength="200" placeholder="โน้ต เช่น hi-life" aria-label="โน้ต" required>
             <select id="mapCat" aria-label="หมวด" required></select>
@@ -67,6 +67,7 @@
             <select id="mapSource" aria-label="ที่มา">
               <option value="">ทุกที่มา</option>
               <option value="admin">admin</option>
+              <option value="history">จากประวัติ</option>
               <option value="ai">AI</option>
             </select>
           </div>
