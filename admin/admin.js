@@ -318,6 +318,7 @@
       map = await mapApi("GET");
       if (!$("mapCat").options.length) categoryOptions($("mapCat"));
       renderMap();
+      renderRules();
     } catch (e) {
       mapMsg("โหลดตารางหมวดกลางไม่สำเร็จ: " + e.message, true);
     }
@@ -459,6 +460,42 @@
       $("guessGo").disabled = false;
     }
   });
+
+  // "หมวดหมู่และคำที่ใช้เดา": read-only view of components/categories.js
+  function chips(words, q, cls) {
+    const box = el("div", "chips");
+    for (const w of words) box.append(el("span", "chip" + (cls ? " " + cls : "") + (q && w.toLowerCase().includes(q) ? " hit" : ""), w));
+    return box;
+  }
+  function renderRules() {
+    const rules = map.rules || [];
+    const q = $("rulesSearch").value.trim().toLowerCase();
+    const shared = new Map();
+    for (const it of map.items) shared.set(it.category, (shared.get(it.category) || 0) + 1);
+    const words = rules.reduce((n, c) => n + c.keywords.length + c.places.length, 0);
+    $("rulesCount").textContent = `${num.format(rules.length)} หมวด · ${num.format(words)} คำ`;
+    const match = (c) => !q || [...c.tags, ...c.keywords, ...c.places].some((w) => w.toLowerCase().includes(q));
+    const shown = rules.filter(match);
+    if (!shown.length) return $("rulesList").replaceChildren(el("p", "muted", `ไม่มีหมวดไหนมีคำที่มี "${q}"`));
+    $("rulesList").replaceChildren(...shown.map((c) => {
+      const d = el("details", "rule");
+      if (q) d.open = true;
+      const s = el("summary");
+      const meta = [KIND_TH[c.kind], `${num.format(c.keywords.length)} คำ`];
+      if (c.places.length) meta.push(`ร้าน/สถานที่ ${num.format(c.places.length)}`);
+      if (shared.get(c.key)) meta.push(`ตารางกลาง ${num.format(shared.get(c.key))} แถว`);
+      s.append(el("span", "rule-name", `${c.icon} ${c.label}`), el("span", "muted", meta.join(" · ")));
+      d.append(s);
+      const body = el("div", "rule-body");
+      body.append(el("div", "rule-h", "#tag ที่ใช้ได้"), chips(c.tags.map((t) => "#" + t), q, "tag"));
+      if (c.keywords.length) body.append(el("div", "rule-h", "คำของที่ซื้อ/จ่าย"), chips(c.keywords, q));
+      if (c.places.length) body.append(el("div", "rule-h", "ร้าน/สถานที่ (ใช้เมื่อไม่เจอคำด้านบน)"), chips(c.places, q, "place"));
+      if (!c.keywords.length && !c.places.length) body.append(el("p", "muted", "ไม่มีคำ — ใช้เมื่อหาหมวดอื่นไม่เจอ"));
+      d.append(body);
+      return d;
+    }));
+  }
+  $("rulesSearch").addEventListener("input", () => map && renderRules());
 
   $("refresh").addEventListener("click", load);
   let rt;

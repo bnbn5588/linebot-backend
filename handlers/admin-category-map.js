@@ -5,11 +5,12 @@ const {
 } = require("../components/db");
 const { adminAuth } = require("../components/adminAuth");
 const { adminCors } = require("../components/adminCors");
-const { NOTE_KEY_SQL, CATEGORIES, noteKey, publicList } = require("../components/categories");
+const { NOTE_KEY_SQL, CATEGORIES, noteKey, publicList, adminList } = require("../components/categories");
 
 // /api/admin-category-map — the shared note → category mapping used for
 // every user (after the user's own memory, before keyword guessing).
 //   GET                                  list + categories + record counts
+//                                        + rules (every category's #tags, keywords, places)
 //   PUT    body { note, category }       add or change (kind follows the category)
 //   DELETE ?note_key=&kind=              remove
 // Admins only (LINE ID token, components/adminAuth.js); CORS for the admin site.
@@ -41,6 +42,7 @@ async function list(req, res, connection) {
     status: "success",
     data: {
       categories: publicList(),
+      rules: adminList(),
       items: r.rows.map(([note_key, kind, category, source, updated_at, records]) => ({
         note_key, kind, category, source, updated_at, records,
       })),

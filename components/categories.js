@@ -300,12 +300,23 @@ function describe(key, amount) {
   return { key: c.key, label: c.label, icon: c.icon, kind: c.kind, assigned: !!key };
 }
 
+// Full list for the admin site: every #tag word, keyword and place.
+function adminList() {
+  return CATEGORIES.map(({ key, kind, label, icon, aliases, keywords, places }) => ({
+    key, kind, label, icon,
+    tags: [...new Set([key, label.toLowerCase(), ...aliases])],
+    keywords: [...new Set(keywords)],
+    places: [...new Set(places || [])],
+  }));
+}
+
 // Public list for the web app (no keywords).
 function publicList() {
   return CATEGORIES.map(({ key, kind, label, icon }) => ({ key, kind, label, icon }));
 }
 
 module.exports = {
+  adminList,
   explain,
   kindOf,
   NOTE_KEY_SQL,
