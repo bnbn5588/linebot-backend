@@ -64,6 +64,7 @@ x-api-key: <API_KEY>
 | `GET` | `/api/help` | `lang` (`th` or `en`) | Help content as cards (shown by the bot's `help` / `ช่วยเหลือ`); edit it in `components/help.js` |
 | `GET` | `/api/ping` | – | Keep-warm check: runs `SELECT 1 FROM DUAL`, returns `db_ms` |
 | `GET` | `/api/admin-overview` | – | Admin site data (LINE ID token of an admin, see [Admin website](#admin-website)) |
+| `GET` `PUT` `DELETE` | `/api/admin-category-map` | PUT `note`, `category`; DELETE `note_key`, `kind` | Shared note → category mapping for all users (admin only) |
 
 Unknown routes return 404, a missing or wrong key returns 403.
 
@@ -137,8 +138,15 @@ Google Cloud, OCI and LINE consoles.
 - API: `GET /api/admin-overview` — LINE ID token of an admin. Admins are listed
   in `DEFAULT_ADMIN_USER_IDS` (`components/adminAuth.js`) or the `ADMIN_USER_IDS`
   env var; a signed-in non-admin sees their own LINE userId so it can be added.
-- CORS: only origins in `DEFAULT_ADMIN_ORIGINS` (`handlers/admin-overview.js`) or
+- CORS: only origins in `DEFAULT_ADMIN_ORIGINS` (`components/adminCors.js`) or
   `ADMIN_ORIGINS` may call it.
+- Shared category table (`/api/admin-category-map`, table `CATEGORY_MAP`,
+  migration `scripts/migrations/002-category-map.sql`): note → category for
+  every user, matched on the whole note (lower-case, single spaces). Order when a
+  record is saved: `#tag` > the user's own memory > shared table > keywords >
+  other. Rows have a source (`admin`, or `ai` for future AI suggestions; saving
+  a row on the admin site makes it `admin`). Only new records are affected;
+  `scripts/backfill-categories.js` also uses the table.
 - Login: a second LIFF app in the same LINE Login channel, endpoint = the admin
   site URL; its LIFF ID goes in `admin/config.js`.
 

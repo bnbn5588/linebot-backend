@@ -97,6 +97,7 @@
       $("status").hidden = true;
       $("view").hidden = false;
       renderChart();
+      loadMap();
     } catch (e) {
       showStatus("โหลดข้อมูลไม่สำเร็จ: " + e.message, true);
     } finally {
@@ -276,6 +277,116 @@
     const f = (raw || 1) / p;
     return Math.max(1, (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p);
   }
+
+  // ---- shared note → category mapping (/api/admin-category-map)
+  let map = { categories: [], items: [] };
+  const KIND_TH = { expense: "รายจ่าย", income: "รายรับ" };
+  const catLabel = (key) => { const c = map.categories.find((x) => x.key === key); return c ? `${c.icon} ${c.label}` : key; };
+  function mapMsg(text, isErr) { const m = $("mapMsg"); m.textContent = text || ""; m.classList.toggle("err", !!isErr); }
+  async function mapApi(method, query, body) {
+    const r = await fetch(apiBase + "/admin-category-map" + (query ? "?" + new URLSearchParams(query) : ""), {
+      method,
+      headers: Object.assign({ Authorization: "Bearer " + token }, body ? { "Content-Type": "application/json" } : {}),
+      body: body ? JSON.stringify(body) : undefined,
+      cache: "no-store",
+    });
+    let j = null;
+    try { j = await r.json(); } catch { /* ignore */ }
+    if (!r.ok) throw new Error((j && j.message) || "HTTP " + r.status);
+    return j.data;
+  }
+  function categoryOptions(select, kind, selected) {
+    const groups = kind ? [kind] : ["expense", "income"];
+    select.replaceChildren(...groups.map((k) => {
+      const g = el("optgroup");
+      g.label = KIND_TH[k];
+      for (const c of map.categories.filter((x) => x.kind === k)) {
+        const o = el("option", "", `${c.icon} ${c.label}`);
+        o.value = c.key;
+        if (c.key === selected) o.selected = true;
+        g.append(o);
+      }
+      return g;
+    }));
+  }
+  async function loadMap() {
+    try {
+      map = await mapApi("GET");
+      if (!$("mapCat").options.length) categoryOptions($("mapCat"));
+      renderMap();
+    } catch (e) {
+      mapMsg("โหลดตารางหมวดกลางไม่สำเร็จ: " + e.message, true);
+    }
+  }
+  function renderMap() {
+    const q = $("mapSearch").value.trim().toLowerCase();
+    const src = $("mapSource").value;
+    const items = map.items.filter((it) => (!q || it.note_key.includes(q)) && (!src || it.source === src));
+    $("mapCount").textContent = `${num.format(map.items.length)} รายการ`;
+    if (!items.length) {
+      const tr = el("tr", "empty");
+      const td = el("td", "", map.items.length ? "ไม่พบที่ตรงกับตัวกรอง" : "ยังไม่มีรายการ — เพิ่มด้านบน");
+      td.colSpan = 7;
+      tr.append(td);
+      return $("mapTable").replaceChildren(tr);
+    }
+    $("mapTable").replaceChildren(...items.map((it) => {
+      const tr = el("tr");
+      const sel = el("select");
+      sel.setAttribute("aria-label", "หมวดของ " + it.note_key);
+      categoryOptions(sel, it.kind, it.category);
+      sel.addEventListener("change", async () => {
+        sel.disabled = true;
+        try {
+          await mapApi("PUT", null, { note: it.note_key, category: sel.value });
+          mapMsg(`บันทึก "${it.note_key}" → ${catLabel(sel.value)}`);
+          await loadMap();
+        } catch (e) {
+          mapMsg("บันทึกไม่สำเร็จ: " + e.message, true);
+          sel.value = it.category;
+          sel.disabled = false;
+        }
+      });
+      const tdSel = el("td"); tdSel.append(sel);
+      const tdSrc = el("td"); tdSrc.append(el("span", "src " + it.source, it.source === "ai" ? "AI" : "admin"));
+      const del = el("button", "btn small", "ลบ");
+      del.type = "button";
+      del.addEventListener("click", async () => {
+        if (!confirm(`ลบ "${it.note_key}" (${KIND_TH[it.kind]}) ออกจากตารางหมวดกลาง?`)) return;
+        del.disabled = true;
+        try {
+          await mapApi("DELETE", { note_key: it.note_key, kind: it.kind });
+          mapMsg(`ลบ "${it.note_key}" แล้ว`);
+          await loadMap();
+        } catch (e) {
+          mapMsg("ลบไม่สำเร็จ: " + e.message, true);
+          del.disabled = false;
+        }
+      });
+      const tdDel = el("td"); tdDel.append(del);
+      tr.append(el("td", "", it.note_key), el("td", "", KIND_TH[it.kind]), tdSel, tdSrc, el("td", "", num.format(it.records)), el("td", "", it.updated_at), tdDel);
+      return tr;
+    }));
+  }
+  $("mapForm").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const note = $("mapNote").value.trim();
+    const category = $("mapCat").value;
+    if (!note || !category) return;
+    $("mapSave").disabled = true;
+    try {
+      const d = await mapApi("PUT", null, { note, category });
+      mapMsg(`บันทึก "${d.note_key}" → ${catLabel(d.category)}`);
+      $("mapNote").value = "";
+      await loadMap();
+    } catch (e) {
+      mapMsg("บันทึกไม่สำเร็จ: " + e.message, true);
+    } finally {
+      $("mapSave").disabled = false;
+    }
+  });
+  $("mapSearch").addEventListener("input", renderMap);
+  $("mapSource").addEventListener("change", renderMap);
 
   $("refresh").addEventListener("click", load);
   let rt;

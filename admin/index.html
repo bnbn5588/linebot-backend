@@ -54,6 +54,31 @@
           </div>
         </section>
 
+        <section class="card span2" id="mapCard">
+          <div class="card-head"><h2>ตารางหมวดกลาง (ใช้กับทุกคน)</h2><span class="muted" id="mapCount"></span></div>
+          <p class="muted help">ใช้เมื่อผู้ใช้ไม่ได้ตั้งหมวดของโน้ตนั้นเอง และมีผลก่อนการเดาจากคำในโน้ต โดยจับคู่กับโน้ตทั้งข้อความ (ไม่สนตัวพิมพ์เล็กใหญ่และช่องว่าง) มีผลกับรายการใหม่เท่านั้น รายการเก่าไม่เปลี่ยน</p>
+          <form class="map-form" id="mapForm" autocomplete="off">
+            <input id="mapNote" type="text" maxlength="200" placeholder="โน้ต เช่น hi-life" aria-label="โน้ต" required>
+            <select id="mapCat" aria-label="หมวด" required></select>
+            <button class="btn primary" type="submit" id="mapSave">บันทึก</button>
+          </form>
+          <div class="map-tools">
+            <input id="mapSearch" type="search" placeholder="ค้นหาโน้ต" aria-label="ค้นหาโน้ต">
+            <select id="mapSource" aria-label="ที่มา">
+              <option value="">ทุกที่มา</option>
+              <option value="admin">admin</option>
+              <option value="ai">AI</option>
+            </select>
+          </div>
+          <div class="map-msg" id="mapMsg" role="status"></div>
+          <div class="scroll">
+            <table class="t map">
+              <thead><tr><th>โน้ต</th><th>ประเภท</th><th>หมวด</th><th>ที่มา</th><th>รายการที่ตรง</th><th>อัปเดต</th><th></th></tr></thead>
+              <tbody id="mapTable"></tbody>
+            </table>
+          </div>
+        </section>
+
         <section class="card">
           <div class="card-head"><h2>ฐานข้อมูล</h2><span class="muted" id="dbVersion"></span></div>
           <div class="meter" id="dbMeter"></div>
