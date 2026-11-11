@@ -153,3 +153,5 @@ h2 { font-size: 14px; margin: 0; font-weight: 600; }
 .map-msg.err { color: var(--critical); }
 .empty td { text-align: center !important; color: var(--text-muted); padding: 16px; }
 .t.map th:nth-child(3), .t.map td:nth-child(3) { text-align: left; }
+.pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 10px; }
+.pager .muted { font-size: 13px; font-variant-numeric: tabular-nums; }

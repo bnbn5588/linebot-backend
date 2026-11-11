@@ -282,6 +282,8 @@
   let map = { categories: [], items: [] };
   const KIND_TH = { expense: "รายจ่าย", income: "รายรับ" };
   const SOURCE_TH = { admin: "admin", history: "จากประวัติ", ai: "AI" };
+  const PAGE_SIZE = 20;
+  let mapPageNo = 1;
   const catLabel = (key) => { const c = map.categories.find((x) => x.key === key); return c ? `${c.icon} ${c.label}` : key; };
   function mapMsg(text, isErr) { const m = $("mapMsg"); m.textContent = text || ""; m.classList.toggle("err", !!isErr); }
   async function mapApi(method, query, body) {
@@ -322,8 +324,16 @@
   function renderMap() {
     const q = $("mapSearch").value.trim().toLowerCase();
     const src = $("mapSource").value;
-    const items = map.items.filter((it) => (!q || it.note_key.includes(q)) && (!src || it.source === src));
+    const all = map.items.filter((it) => (!q || it.note_key.includes(q)) && (!src || it.source === src));
     $("mapCount").textContent = `${num.format(map.items.length)} รายการ`;
+    const pages = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
+    mapPageNo = Math.min(Math.max(mapPageNo, 1), pages);
+    const from = (mapPageNo - 1) * PAGE_SIZE;
+    const items = all.slice(from, from + PAGE_SIZE);
+    $("mapPager").hidden = all.length <= PAGE_SIZE;
+    $("mapPage").textContent = `หน้า ${mapPageNo}/${pages} · ${num.format(from + 1)}–${num.format(from + items.length)} จาก ${num.format(all.length)}`;
+    $("mapPrev").disabled = mapPageNo <= 1;
+    $("mapNext").disabled = mapPageNo >= pages;
     if (!items.length) {
       const tr = el("tr", "empty");
       const td = el("td", "", map.items.length ? "ไม่พบที่ตรงกับตัวกรอง" : "ยังไม่มีรายการ — เพิ่มด้านบน");
@@ -386,8 +396,10 @@
       $("mapSave").disabled = false;
     }
   });
-  $("mapSearch").addEventListener("input", renderMap);
-  $("mapSource").addEventListener("change", renderMap);
+  $("mapSearch").addEventListener("input", () => { mapPageNo = 1; renderMap(); });
+  $("mapSource").addEventListener("change", () => { mapPageNo = 1; renderMap(); });
+  $("mapPrev").addEventListener("click", () => { mapPageNo--; renderMap(); });
+  $("mapNext").addEventListener("click", () => { mapPageNo++; renderMap(); });
 
   $("refresh").addEventListener("click", load);
   let rt;
