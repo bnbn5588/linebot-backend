@@ -155,3 +155,18 @@ h2 { font-size: 14px; margin: 0; font-weight: 600; }
 .t.map th:nth-child(3), .t.map td:nth-child(3) { text-align: left; }
 .pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 10px; }
 .pager .muted { font-size: 13px; font-variant-numeric: tabular-nums; }
+.map-form select { flex: 0 1 auto; max-width: 100%; }
+.guess-result { margin: 4px 0 8px; font-size: 15px; }
+.guess-result b { font-size: 17px; }
+.steps { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 10px; }
+.steps li { display: grid; grid-template-columns: 22px minmax(110px, auto) minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.steps li:last-child { border-bottom: 0; }
+.steps .mark { text-align: center; color: var(--text-muted); }
+.steps .name { color: var(--text-secondary); }
+.steps .what { overflow-wrap: anywhere; color: var(--text-muted); }
+.steps li.hit .what { color: var(--text-primary); }
+.steps li.used { background: var(--surface-2); }
+.steps li.used .mark { color: var(--good); font-weight: 700; }
+.steps li.used .name { color: var(--text-primary); font-weight: 600; }
+.steps .note { display: block; font-size: 12px; color: var(--text-muted); }
+@media (max-width: 480px) { .steps li { grid-template-columns: 22px minmax(0, 1fr); } .steps .what { grid-column: 2; } }

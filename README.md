@@ -65,6 +65,7 @@ x-api-key: <API_KEY>
 | `GET` | `/api/ping` | – | Keep-warm check: runs `SELECT 1 FROM DUAL`, returns `db_ms` |
 | `GET` | `/api/admin-overview` | – | Admin site data (LINE ID token of an admin, see [Admin website](#admin-website)) |
 | `GET` `PUT` `DELETE` | `/api/admin-category-map` | PUT `note`, `category`; DELETE `note_key`, `kind` | Shared note → category mapping for all users (admin only) |
+| `GET` | `/api/admin-category-guess` | `note`, `kind` (expense\|income), optional `uname` | Which category a note would get and from which step, read-only (admin only) |
 
 Unknown routes return 404, a missing or wrong key returns 403.
 
@@ -148,6 +149,10 @@ Google Cloud, OCI and LINE consoles.
   a row on the admin site makes it `admin`, `history` = seeded from existing
   records). Only new records are affected; `scripts/backfill-categories.js`
   also uses the table.
+- Try a note (`/api/admin-category-guess`, card "ลองเดาหมวด" on the admin site):
+  runs the same steps as a real add (`explain()` in `components/categories.js`)
+  without saving anything, and shows every step — including the keyword that
+  matched and the shared-table row's source — even after an earlier step won.
 - Seed from existing records: `node scripts/seed-category-map.js [--min=5]
   [--share=0.6] [--apply]` — notes used at least `min` times get their most
   common category (skipping "other" and notes whose records disagree); existing

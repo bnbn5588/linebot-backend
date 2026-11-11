@@ -54,6 +54,27 @@
           </div>
         </section>
 
+        <section class="card span2" id="guessCard">
+          <div class="card-head"><h2>ลองเดาหมวด</h2><span class="muted">ไม่บันทึกอะไร</span></div>
+          <p class="muted help">ใส่โน้ตเพื่อดูว่าระบบจะได้หมวดอะไร มาจากขั้นไหน และแต่ละขั้นเจออะไร ลำดับ: #tag → ความจำของผู้ใช้ → ตารางหมวดกลาง → คำในโน้ต → อื่นๆ</p>
+          <form class="map-form" id="guessForm" autocomplete="off">
+            <input id="guessNote" type="text" maxlength="200" placeholder="โน้ต เช่น กาแฟ starbucks" aria-label="โน้ตที่จะลอง" required>
+            <select id="guessKind" aria-label="ประเภท">
+              <option value="expense">รายจ่าย</option>
+              <option value="income">รายรับ</option>
+            </select>
+            <select id="guessUser" aria-label="มุมมองของผู้ใช้">
+              <option value="">มุมมองของ: ไม่ระบุผู้ใช้</option>
+            </select>
+            <button class="btn primary" type="submit" id="guessGo">เดา</button>
+          </form>
+          <div class="map-msg" id="guessMsg" role="status"></div>
+          <div id="guessOut" hidden>
+            <p class="guess-result" id="guessResult"></p>
+            <ol class="steps" id="guessSteps"></ol>
+          </div>
+        </section>
+
         <section class="card span2" id="mapCard">
           <div class="card-head"><h2>ตารางหมวดกลาง (ใช้กับทุกคน)</h2><span class="muted" id="mapCount"></span></div>
           <p class="muted help">ใช้เมื่อผู้ใช้ไม่ได้ตั้งหมวดของโน้ตนั้นเอง และมีผลก่อนการเดาจากคำในโน้ต โดยจับคู่กับโน้ตทั้งข้อความ (ไม่สนตัวพิมพ์เล็กใหญ่และช่องว่าง) มีผลกับรายการใหม่เท่านั้น รายการเก่าไม่เปลี่ยน · ที่มา: <b>admin</b> = เพิ่ม/แก้บนหน้านี้, <b>จากประวัติ</b> = โน้ตที่ใช้บ่อยในข้อมูลเดิม, <b>AI</b> = AI แนะนำ (แก้แล้วจะกลายเป็น admin)</p>

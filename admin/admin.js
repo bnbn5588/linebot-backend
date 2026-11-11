@@ -98,6 +98,7 @@
       $("view").hidden = false;
       renderChart();
       loadMap();
+      fillGuessUsers();
     } catch (e) {
       showStatus("โหลดข้อมูลไม่สำเร็จ: " + e.message, true);
     } finally {
@@ -400,6 +401,64 @@
   $("mapSource").addEventListener("change", () => { mapPageNo = 1; renderMap(); });
   $("mapPrev").addEventListener("click", () => { mapPageNo--; renderMap(); });
   $("mapNext").addEventListener("click", () => { mapPageNo++; renderMap(); });
+
+  // "ลองเดาหมวด": same steps as a real add, read-only (/api/admin-category-guess)
+  const STEP_TH = { explicit: "#tag ในโน้ต", memory: "ความจำของผู้ใช้", shared: "ตารางหมวดกลาง", keyword: "คำในโน้ต", fallback: "ไม่เจอ → อื่นๆ" };
+  const catText = (c) => `${c.icon} ${c.label}`;
+  function guessMsg(text, isErr) { const m = $("guessMsg"); m.textContent = text || ""; m.classList.toggle("err", !!isErr); }
+  function fillGuessUsers() {
+    const sel = $("guessUser");
+    const keep = sel.value;
+    sel.replaceChildren(sel.options[0]);
+    for (const u of (data && data.users) || []) {
+      const o = el("option", "", "มุมมองของ: " + (u.name || shortId(u.user_id)));
+      o.value = u.user_id;
+      sel.append(o);
+    }
+    sel.value = keep;
+    if (sel.value !== keep) sel.value = "";
+  }
+  function stepDetail(s, r) {
+    if (s.step === "explicit") return s.category ? `ใส่ tag เป็น ${catText(s.category)}` : "ไม่มี #tag";
+    if (s.step === "memory") {
+      if (s.skipped) return "ไม่ได้เลือกผู้ใช้";
+      return s.category ? `ผู้ใช้คนนี้เคยตั้ง "${r.note_key}" เป็น ${catText(s.category)}` : "ผู้ใช้คนนี้ไม่เคยตั้งหมวดของโน้ตนี้";
+    }
+    if (s.step === "shared") return s.category ? `"${r.note_key}" → ${catText(s.category)} (ที่มา: ${SOURCE_TH[s.source] || s.source})` : "ไม่มีโน้ตนี้ในตาราง (ต้องตรงทั้งข้อความ)";
+    if (s.step === "keyword") return s.category ? `เจอคำว่า "${s.word}"${s.field === "places" ? " (ชื่อร้าน/สถานที่)" : ""} → ${catText(s.category)}` : "ไม่เจอคำที่รู้จัก";
+    return catText(s.category);
+  }
+  $("guessForm").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const note = $("guessNote").value.trim();
+    if (!note) return;
+    const q = { note, kind: $("guessKind").value };
+    if ($("guessUser").value) q.uname = $("guessUser").value;
+    $("guessGo").disabled = true;
+    guessMsg("");
+    try {
+      const r = await fetch(apiBase + "/admin-category-guess?" + new URLSearchParams(q), { headers: { Authorization: "Bearer " + token }, cache: "no-store" });
+      let j = null;
+      try { j = await r.json(); } catch { /* ignore */ }
+      if (!r.ok) throw new Error((j && j.message) || "HTTP " + r.status);
+      const d = j.data;
+      const res = $("guessResult");
+      res.replaceChildren("ผลลัพธ์: ", el("b", "", catText(d.category)), el("span", "muted", "  ← มาจาก: " + STEP_TH[d.source]));
+      if (d.note !== note) res.append(el("span", "note muted", `โน้ตที่จะบันทึก: "${d.note}"`));
+      $("guessSteps").replaceChildren(...d.steps.filter((s) => s.step !== "fallback" || s.used).map((s, i) => {
+        const li = el("li", (s.used ? "used " : "") + (s.category ? "hit" : ""));
+        const what = el("span", "what", stepDetail(s, d));
+        if (s.category && !s.used && s.step !== "fallback") what.append(el("span", "note", "ไม่ได้ใช้ เพราะขั้นก่อนหน้าเจอแล้ว"));
+        li.append(el("span", "mark", s.used ? "✓" : s.category ? "·" : "–"), el("span", "name", `${i + 1}. ${STEP_TH[s.step]}`), what);
+        return li;
+      }));
+      $("guessOut").hidden = false;
+    } catch (e) {
+      guessMsg("เดาไม่สำเร็จ: " + e.message, true);
+    } finally {
+      $("guessGo").disabled = false;
+    }
+  });
 
   $("refresh").addEventListener("click", load);
   let rt;

@@ -132,6 +132,7 @@ const toMatcher = (k) => {
   const latin = /^[\x20-\x7e]+$/.test(w);
   const re = latin ? new RegExp(`(^|[^a-z0-9])(${escapeRe(w)})($|[^a-z0-9])`) : null;
   return {
+    word: w,
     len: w.length,
     test: re
       ? (t) => { const m = re.exec(t); return m ? m.index + m[1].length : -1; }
@@ -155,18 +156,24 @@ function bestMatch(text, kind, field) {
     for (const w of m[field]) {
       const pos = w.test(text);
       if (pos < 0) continue;
-      if (!best || pos < best.pos || (pos === best.pos && w.len > best.len)) best = { key: m.key, pos, len: w.len };
+      if (!best || pos < best.pos || (pos === best.pos && w.len > best.len)) best = { key: m.key, pos, len: w.len, word: w.word };
     }
   }
-  return best ? best.key : null;
+  return best;
 }
 
 // What was bought decides; places (shops) are only a fallback.
-function byKeyword(note, amount) {
+// Returns { key, word, field } (the keyword that matched) or null.
+function keywordMatch(note, amount) {
   const text = noteKey(note);
   const kind = kindOf(amount);
-  return bestMatch(text, kind, "words") || bestMatch(text, kind, "places");
+  for (const field of ["words", "places"]) {
+    const m = bestMatch(text, kind, field);
+    if (m) return { key: m.key, word: m.word, field };
+  }
+  return null;
 }
+const byKeyword = (note, amount) => keywordMatch(note, amount)?.key || null;
 
 async function fromMemory(connection, uname, note, amount) {
   const key = noteKey(note);
@@ -181,14 +188,15 @@ async function fromMemory(connection, uname, note, amount) {
 }
 
 // Shared mapping (same for every user), exact note match.
-async function fromShared(connection, note, amount) {
+// Returns { category, source } or null.
+async function sharedRow(connection, note, amount) {
   const key = noteKey(note);
   if (!key) return null;
   let r;
   try {
     r = await executeQuery(
       connection,
-      "SELECT category FROM category_map WHERE note_key = :note_key AND kind = :kind",
+      "SELECT category, source FROM category_map WHERE note_key = :note_key AND kind = :kind",
       { note_key: key, kind: kindOf(amount) }
     );
   } catch (e) {
@@ -197,9 +205,11 @@ async function fromShared(connection, note, amount) {
     if (e && e.errorNum === 942) return null;
     throw e;
   }
-  const cat = r.rows[0] && r.rows[0][0];
-  return cat && isValidFor(cat, amount) ? cat : null;
+  const row = r.rows[0];
+  return row && isValidFor(row[0], amount) ? { category: row[0], source: row[1] } : null;
 }
+const fromShared = async (connection, note, amount) =>
+  (await sharedRow(connection, note, amount))?.category || null;
 
 // Decide the category of a record. Returns { category, source, note } where
 // note is the text to store (with a recognised #tag removed).
@@ -216,6 +226,27 @@ async function categorize(connection, uname, rawNote, amount) {
   const keyword = byKeyword(note, amount);
   if (keyword) return { category: keyword, source: "keyword", note };
   return { category: fallbackFor(amount), source: "fallback", note };
+}
+
+// Same decision as categorize(), but read-only and showing every step, for
+// the admin "try a note" tool. uname may be null (skip the memory step).
+// Every step is evaluated even after one has matched, so the admin can see
+// what would happen if an earlier step were removed.
+async function explain(connection, uname, rawNote, amount) {
+  const { note, tagCategory } = extractTag(rawNote, amount);
+  const steps = [];
+  steps.push({ step: "explicit", category: tagCategory || null });
+  steps.push(uname
+    ? { step: "memory", category: await fromMemory(connection, uname, note, amount) }
+    : { step: "memory", category: null, skipped: true });
+  const shared = await sharedRow(connection, note, amount);
+  steps.push({ step: "shared", category: shared ? shared.category : null, source: shared ? shared.source : null });
+  const kw = keywordMatch(note, amount);
+  steps.push({ step: "keyword", category: kw ? kw.key : null, word: kw ? kw.word : null, field: kw ? kw.field : null });
+  steps.push({ step: "fallback", category: fallbackFor(amount) });
+  const chosen = steps.find((s) => s.category);
+  for (const s of steps) s.used = s === chosen;
+  return { note, note_key: noteKey(note), kind: kindOf(amount), category: chosen.category, source: chosen.step, steps };
 }
 
 // Remember the user's choice for this note. Choosing "other" forgets what
@@ -275,6 +306,7 @@ function publicList() {
 }
 
 module.exports = {
+  explain,
   kindOf,
   NOTE_KEY_SQL,
   forgetIfUnused,
