@@ -2,6 +2,7 @@
 // Only the note text and whether it is an expense or income are sent —
 // never the userId, amount or date.
 // Env: GEMINI_API_KEY (required), GEMINI_MODEL (default below),
+//      GEMINI_THINKING_LEVEL (default minimal; "default" = model's own),
 //      GEMINI_BASE_URL (tests only: point at a stub server).
 const { CATEGORIES } = require("./categories");
 
@@ -16,6 +17,10 @@ class AiError extends Error {
 }
 
 const model = () => process.env.GEMINI_MODEL || DEFAULT_MODEL;
+const thinkingLevel = () => {
+  const v = process.env.GEMINI_THINKING_LEVEL || "minimal";
+  return v === "default" ? null : v;
+};
 const enabled = () => !!process.env.GEMINI_API_KEY;
 
 function prompt(note, kind) {
@@ -51,6 +56,9 @@ async function suggestCategory(note, kind) {
         contents: [{ role: "user", parts: [{ text: prompt(note, kind) }] }],
         generationConfig: {
           temperature: 0,
+          // A one-word classification needs no "thinking"; it only adds seconds.
+          // GEMINI_THINKING_LEVEL=default leaves the model's own default.
+          ...(thinkingLevel() ? { thinkingConfig: { thinkingLevel: thinkingLevel() } } : {}),
           responseMimeType: "application/json",
           responseSchema: {
             type: "OBJECT",

@@ -14,62 +14,79 @@ const ai = require("./ai");
 // Only the note text and expense/income are sent to Gemini.
 const DAILY_CAP = Number(process.env.AI_DAILY_CAP) || 200;
 
+// The pool has one connection per instance (components/db.js), so never hold
+// it while waiting for Gemini: other requests (and the add that triggered
+// this) need it.
+async function withConnection(fn) {
+  let connection;
+  try {
+    connection = await getConnection();
+    return await fn(connection);
+  } finally {
+    await closeConnection(connection);
+  }
+}
+
 async function aiFill({ uname, id, note, amount }) {
   if (!ai.enabled()) return { skipped: "NO_KEY" };
   const key = noteKey(note);
   if (!key) return { skipped: "EMPTY" };
   const kind = kindOf(amount);
-  let connection;
   try {
-    connection = await getConnection();
-    const existing = await executeQuery(
-      connection,
-      "SELECT 1 FROM category_map WHERE note_key = :note_key AND kind = :kind",
-      { note_key: key, kind }
-    );
-    if (existing.rows.length) return { skipped: "KNOWN" };
-    const today = await executeQuery(
-      connection,
-      "SELECT count(*) FROM category_map WHERE updated_by = 'auto' AND updated_at >= TRUNC(SYSDATE)",
-      []
-    );
-    if (today.rows[0][0] >= DAILY_CAP) {
-      console.warn(`aiFill: daily cap ${DAILY_CAP} reached`);
-      return { skipped: "CAP" };
-    }
+    const skip = await withConnection(async (connection) => {
+      const existing = await executeQuery(
+        connection,
+        "SELECT 1 FROM category_map WHERE note_key = :note_key AND kind = :kind",
+        { note_key: key, kind }
+      );
+      if (existing.rows.length) return { skipped: "KNOWN" };
+      const today = await executeQuery(
+        connection,
+        "SELECT count(*) FROM category_map WHERE updated_by = 'auto' AND updated_at >= TRUNC(SYSDATE)",
+        []
+      );
+      if (today.rows[0][0] >= DAILY_CAP) {
+        console.warn(`aiFill: daily cap ${DAILY_CAP} reached`);
+        return { skipped: "CAP" };
+      }
+      return null;
+    });
+    if (skip) return skip;
+
     let s;
     try {
       s = await ai.suggestCategory(key, kind);
     } catch (e) {
       if (!(e instanceof ai.AiError)) throw e;
       console.error("aiFill Gemini:", e.code, e.message);
-      return { skipped: e.code };
+      return { skipped: e.code, message: e.message };
     }
-    await executeQuery(
-      connection,
-      `MERGE INTO category_map m
-       USING (SELECT :note_key AS note_key, :kind AS kind FROM dual) s
-          ON (m.note_key = s.note_key AND m.kind = s.kind)
-        WHEN NOT MATCHED THEN INSERT (note_key, kind, category, source, confidence, model, updated_at, updated_by)
-             VALUES (s.note_key, s.kind, :category, 'ai', :confidence, :model, SYSDATE, 'auto')`,
-      { note_key: key, kind, category: s.category, confidence: s.confidence, model: s.model }
-    );
-    let updated = 0;
-    if (s.confidence >= AI_MIN_CONFIDENCE && s.category !== fallbackFor(amount) && id) {
-      // only if the record is still "other" (the user may have changed it meanwhile)
-      const r = await executeQuery(
+
+    return await withConnection(async (connection) => {
+      await executeQuery(
         connection,
-        "UPDATE expense SET category = :category WHERE trans_id = :id AND uname = :uname AND category = :fallback",
-        { category: s.category, id, uname, fallback: fallbackFor(amount) }
+        `MERGE INTO category_map m
+         USING (SELECT :note_key AS note_key, :kind AS kind FROM dual) s
+            ON (m.note_key = s.note_key AND m.kind = s.kind)
+          WHEN NOT MATCHED THEN INSERT (note_key, kind, category, source, confidence, model, updated_at, updated_by)
+               VALUES (s.note_key, s.kind, :category, 'ai', :confidence, :model, SYSDATE, 'auto')`,
+        { note_key: key, kind, category: s.category, confidence: s.confidence, model: s.model }
       );
-      updated = r.rowsAffected || 0;
-    }
-    return { category: s.category, confidence: s.confidence, updated };
+      let updated = 0;
+      if (s.confidence >= AI_MIN_CONFIDENCE && s.category !== fallbackFor(amount) && id) {
+        // only if the record is still "other" (the user may have changed it meanwhile)
+        const r = await executeQuery(
+          connection,
+          "UPDATE expense SET category = :category WHERE trans_id = :id AND uname = :uname AND category = :fallback",
+          { category: s.category, id, uname, fallback: fallbackFor(amount) }
+        );
+        updated = r.rowsAffected || 0;
+      }
+      return { category: s.category, confidence: s.confidence, updated };
+    });
   } catch (e) {
     console.error("aiFill:", e.message);
-    return { skipped: "ERROR" };
-  } finally {
-    await closeConnection(connection);
+    return { skipped: "ERROR", message: e.message };
   }
 }
 
