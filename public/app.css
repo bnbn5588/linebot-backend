@@ -144,6 +144,7 @@ select, input {
 .cats li button { all: unset; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; width: 100%; padding: 6px 0; cursor: pointer; }
 .cats li button:focus-visible { outline: 2px solid var(--focus); border-radius: 6px; }
 .cats li.on .n { font-weight: 700; }
+.cats .d { grid-column: 1 / -1; color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .chip-row { margin: 0 0 8px; }
 .chip { font: inherit; font-size: 13px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-primary); border-radius: 999px; padding: 6px 12px; min-height: 32px; cursor: pointer; }
 .field select { width: 100%; font-size: 16px; }

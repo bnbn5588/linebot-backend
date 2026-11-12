@@ -12,7 +12,8 @@ const CATEGORY_KEYS = new Set(CATEGORIES.map((c) => c.key));
 // GET /api/me-summary?wallet_id=&month=YYYY-MM
 // Dashboard data for one wallet of the signed-in user: overall totals, a row
 // per month (income / expense / balance) and totals by note for `month`
-// (all time when month is omitted). With `category`, category_months has the
+// (all time when month is omitted), totals by category (with the previous
+// month's total for comparison). With `category`, category_months has the
 // per-month rows for that category only.
 module.exports = async (req, res) => {
   if (req.method !== "GET") {
@@ -112,6 +113,24 @@ module.exports = async (req, res) => {
         month ? { ...binds, month } : binds
       );
 
+      // The month before `month`, per category, so the page can show the
+      // change (same NULL -> other rule and type filter as above).
+      let prevCats = null;
+      if (month) {
+        prevCats = await executeQuery(
+          connection,
+          `SELECT NVL(category, CASE WHEN exvalue > 0 THEN 'other_income' ELSE 'other_expense' END) AS cat,
+                  sum(exvalue)
+             FROM expense
+            WHERE uname = :uname AND wallet_id = :wallet_id
+              AND fulldate >= ADD_MONTHS(TO_DATE(:month, 'YYYY-MM'), -1)
+              AND fulldate < TO_DATE(:month, 'YYYY-MM')${typeSql}
+            GROUP BY NVL(category, CASE WHEN exvalue > 0 THEN 'other_income' ELSE 'other_expense' END)`,
+          { ...binds, month }
+        );
+      }
+      const prevTotal = new Map((prevCats ? prevCats.rows : []).map((r) => [r[0], r[1]]));
+
       // With a category picked: the same per-month rows for that category
       // only (chart + month table follow the category, like the by-note list).
       let categoryMonths = null;
@@ -156,7 +175,13 @@ module.exports = async (req, res) => {
           type: type || "all",
           category: category || null,
           by_note: notes.rows.map((r) => ({ note: r[0], total: r[1], count: r[2] })),
-          by_category: cats.rows.map((r) => ({ ...describe(r[0], r[3]), total: r[1], count: r[2] })),
+          // prev_total: the same category in the month before (0 = none; null = no month)
+          by_category: cats.rows.map((r) => ({
+            ...describe(r[0], r[3]),
+            total: r[1],
+            count: r[2],
+            prev_total: month ? prevTotal.get(r[0]) || 0 : null,
+          })),
           category_months: categoryMonths ? monthRows(categoryMonths) : null, // same shape as months
         },
       });

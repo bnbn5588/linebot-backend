@@ -428,10 +428,27 @@
       fill.style.width = Math.max((Math.abs(c.total) / max) * 100, 1.5) + "%";
       track.append(fill);
       b.append(el("span", "n", `${c.icon} ${c.label}`), v, track);
+      const d = compareText(c);
+      if (d) b.append(el("span", "d", d));
       b.addEventListener("click", () => setCategoryFilter(state.category && state.category.key === c.key ? null : c));
       li.append(b);
       return li;
     }));
+  }
+
+  // "เดือนก่อน 4,400 · ใช้มากขึ้น 18%" - compares sizes (abs), so an expense
+  // that grew reads "ใช้มากขึ้น" and income that grew reads "ได้มากขึ้น".
+  function compareText(c) {
+    if (c.prev_total === null || c.prev_total === undefined) return "";
+    const now = Math.abs(Number(c.total) || 0);
+    const before = Math.abs(Number(c.prev_total) || 0);
+    if (!before) return "เดือนก่อนไม่มี";
+    const head = `เดือนก่อน ${money(c.prev_total, true)} · `;
+    const pct = Math.round(((now - before) / before) * 100);
+    if (pct === 0) return head + "เท่าเดิม";
+    const verb = c.kind === "income" ? "ได้" : "ใช้";
+    if (pct >= 1000) return head + `▲ ${verb}มากขึ้น ${Math.round(now / before)} เท่า`;
+    return head + (pct > 0 ? `▲ ${verb}มากขึ้น ${pct}%` : `▼ ${verb}น้อยลง ${-pct}%`);
   }
 
   function setCategoryFilter(c) {
