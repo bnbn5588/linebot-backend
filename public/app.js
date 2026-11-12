@@ -251,13 +251,26 @@
     $("noteMonth").textContent = monthLabel(state.month);
   }
 
+  // Chart + month table follow the category picked in "แยกตามหมวด"
+  // (tiles stay the wallet's totals).
+  function seriesMonths() {
+    return state.summary.category_months || state.summary.months;
+  }
+  function seriesRow(ym) {
+    return seriesMonths().find((m) => m.month === ym) || { month: ym, income: 0, expense: 0, balance: 0, count: 0 };
+  }
+  // With an expense/income category and "ทั้งหมด", show that kind instead of the balance
+  function chartType() {
+    return state.type === "all" && state.category ? state.category.kind : state.type;
+  }
+
   function chartWindow() {
-    const months = state.summary.months;
+    const months = seriesMonths();
     const last = months.length ? months[months.length - 1].month : state.month;
     let end = [currentMonth(state.wallet.timezone), last].sort().pop();
     if (monthsBetween(state.month, end) > 11 || state.month > end) end = state.month;
     const out = [];
-    for (let i = 11; i >= 0; i--) out.push(monthRow(addMonths(end, -i)));
+    for (let i = 11; i >= 0; i--) out.push(seriesRow(addMonths(end, -i)));
     return out;
   }
 
@@ -269,7 +282,10 @@
     const pad = { l: 40, r: 6, t: 18, b: 22 };
     const iw = W - pad.l - pad.r;
     const ih = H - pad.t - pad.b;
-    const T = TYPES[state.type];
+    const T = TYPES[chartType()];
+    const cat = state.category ? ` · ${state.category.icon} ${state.category.label}` : "";
+    $("chartTitle").textContent = T.title + cat;
+    $("chartLegend").hidden = chartType() !== "all";
     const vals = rows.map((r) => r[T.field]);
     const step = niceStep((Math.max(0, ...vals) - Math.min(0, ...vals)) / 3 || 1);
     const lo = Math.floor(Math.min(0, ...vals) / step) * step;
@@ -322,8 +338,8 @@
       s.append(hit);
     });
     box.replaceChildren(s);
-    const cur = monthRow(state.month);
-    $("chartSel").textContent = `${monthLabel(state.month)}: ${money(cur[T.field], state.type === "all")}`;
+    const cur = seriesRow(state.month);
+    $("chartSel").textContent = `${monthLabel(state.month)}: ${money(cur[T.field], chartType() === "all")}`;
   }
 
   function niceStep(raw) {
@@ -357,7 +373,7 @@
 
   function renderMonthTable() {
     const body = $("monthTable");
-    body.replaceChildren(...[...state.summary.months].reverse().map((m) => {
+    body.replaceChildren(...[...seriesMonths()].reverse().map((m) => {
       const tr = el("tr");
       tr.append(el("td", "", monthLabel(m.month)), el("td", "", money(m.income)), el("td", "", money(m.expense)), el("td", "", money(m.balance, true)));
       return tr;
@@ -427,7 +443,7 @@
 
   function showCategoryChips() {
     const label = state.category ? `${state.category.icon} ${state.category.label}  ✕` : "";
-    for (const [row, chip] of [["catChipRow", "catChip"], ["noteChipRow", "noteChip"]]) {
+    for (const [row, chip] of [["chartChipRow", "chartChip"], ["catChipRow", "catChip"], ["noteChipRow", "noteChip"]]) {
       $(row).hidden = !state.category;
       $(chip).textContent = label;
     }
@@ -695,6 +711,7 @@
   });
   $("catChip").addEventListener("click", () => setCategoryFilter(null));
   $("noteChip").addEventListener("click", () => setCategoryFilter(null));
+  $("chartChip").addEventListener("click", () => setCategoryFilter(null));
   $("memoryCard").addEventListener("toggle", () => { if ($("memoryCard").open) run(loadMemory); });
   $("more").addEventListener("click", () => run(() => loadTx(false)));
   $("editForm").addEventListener("submit", save);

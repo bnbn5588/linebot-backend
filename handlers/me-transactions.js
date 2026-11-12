@@ -59,9 +59,12 @@ async function list(req, res, connection, uname) {
       return badRequest(res, "Unknown 'category'.");
     }
     // Old records have no category yet; they count as "other"
-    filters += category === "other_expense" || category === "other_income"
-      ? " AND (category = :category OR category IS NULL)"
-      : " AND category = :category";
+    // (by sign, as in me-summary: > 0 income, otherwise expense)
+    filters += category === "other_expense"
+      ? " AND (category = :category OR (category IS NULL AND exvalue <= 0))"
+      : category === "other_income"
+        ? " AND (category = :category OR (category IS NULL AND exvalue > 0))"
+        : " AND category = :category";
     binds.category = category;
   }
   if (q && q.length > 100) {

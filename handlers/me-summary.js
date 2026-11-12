@@ -12,7 +12,8 @@ const CATEGORY_KEYS = new Set(CATEGORIES.map((c) => c.key));
 // GET /api/me-summary?wallet_id=&month=YYYY-MM
 // Dashboard data for one wallet of the signed-in user: overall totals, a row
 // per month (income / expense / balance) and totals by note for `month`
-// (all time when month is omitted).
+// (all time when month is omitted). With `category`, category_months has the
+// per-month rows for that category only.
 module.exports = async (req, res) => {
   if (req.method !== "GET") {
     return res.status(405).json({ status: "error", message: "Use GET." });
@@ -80,9 +81,12 @@ module.exports = async (req, res) => {
       const noteBinds = month ? { ...binds, month } : { ...binds };
       let categoryFilter = "";
       if (category) {
-        categoryFilter = /^other_/.test(category)
-          ? " AND (category = :category OR category IS NULL)"
-          : " AND category = :category";
+        // (old records count as "other" of their sign: > 0 income, else expense)
+        categoryFilter = category === "other_expense"
+          ? " AND (category = :category OR (category IS NULL AND exvalue <= 0))"
+          : category === "other_income"
+            ? " AND (category = :category OR (category IS NULL AND exvalue > 0))"
+            : " AND category = :category";
         noteBinds.category = category;
       }
       const notes = await executeQuery(
@@ -107,6 +111,26 @@ module.exports = async (req, res) => {
           ORDER BY 2`,
         month ? { ...binds, month } : binds
       );
+
+      // With a category picked: the same per-month rows for that category
+      // only (chart + month table follow the category, like the by-note list).
+      let categoryMonths = null;
+      if (category) {
+        categoryMonths = await executeQuery(
+          connection,
+          `SELECT TO_CHAR(fulldate, 'YYYY-MM'),
+                  sum(CASE WHEN exvalue > 0 THEN exvalue ELSE 0 END),
+                  sum(CASE WHEN exvalue < 0 THEN exvalue ELSE 0 END),
+                  sum(exvalue),
+                  count(*)
+             FROM expense
+            WHERE uname = :uname AND wallet_id = :wallet_id${categoryFilter}
+            GROUP BY TO_CHAR(fulldate, 'YYYY-MM')
+            ORDER BY 1`,
+          { ...binds, category }
+        );
+      }
+      const monthRows = (r) => r.rows.map((x) => ({ month: x[0], income: x[1], expense: x[2], balance: x[3], count: x[4] }));
 
       const t = totals.rows[0];
       res.status(200).json({
@@ -133,6 +157,7 @@ module.exports = async (req, res) => {
           category: category || null,
           by_note: notes.rows.map((r) => ({ note: r[0], total: r[1], count: r[2] })),
           by_category: cats.rows.map((r) => ({ ...describe(r[0], r[3]), total: r[1], count: r[2] })),
+          category_months: categoryMonths ? monthRows(categoryMonths) : null, // same shape as months
         },
       });
     } catch (error) {
