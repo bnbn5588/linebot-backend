@@ -2,6 +2,7 @@
   "version": 2,
   "regions": ["hnd1"],
   "outputDirectory": "public",
+  "functions": { "api/index.js": { "maxDuration": 60 } },
   "rewrites": [{ "source": "/api/:route", "destination": "/api/index?route=:route" }],
   "headers": [
     {

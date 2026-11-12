@@ -7,7 +7,7 @@
 const { CATEGORIES } = require("./categories");
 
 const DEFAULT_MODEL = "gemini-3.5-flash-lite";
-const TIMEOUT_MS = 8000;
+const TIMEOUT_MS = 25000; // one request; Gemini free tier sometimes takes 10-20 s
 
 class AiError extends Error {
   constructor(code, message, retryable = false) {
@@ -18,10 +18,10 @@ class AiError extends Error {
 }
 
 // Gemini (free tier especially) sometimes answers 503 "high demand" or 429.
-// Retry a couple of times, but finish within the budget: a Vercel function
-// (and its waitUntil work) is stopped after ~10 s.
+// Retry a couple of times, but finish within the budget: the Vercel function
+// (and its waitUntil work) may run 60 s (vercel.json maxDuration).
 const RETRY_DELAYS_MS = [1000, 2500];
-const BUDGET_MS = 8000;
+const BUDGET_MS = 40000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const model = () => process.env.GEMINI_MODEL || DEFAULT_MODEL;
