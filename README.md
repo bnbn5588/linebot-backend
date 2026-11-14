@@ -80,7 +80,7 @@ their own records. `API_KEY` must never be put in the web page.
 | Method | Endpoint | Parameters | Description |
 |---|---|---|---|
 | `GET` | `/api/me` | – | Current wallet and all wallets (404 `NO_WALLET` if the user never created one) |
-| `GET` | `/api/me-summary` | `wallet_id`, `month` (`YYYY-MM`), `type`, `category` | Totals, income/expense/balance per month, totals by note and by category for the month (each category with `prev_total`, the month before, for the "เดือนก่อน" line); with `category`, `category_months` |
+| `GET` | `/api/me-summary` | `wallet_id`, `month` (`YYYY-MM`), `type`, `category` | Totals, income/expense/balance per month, totals by note and by category for the month (each category with `prev_total`, the month before — only the same days so far when `month` is the current month, see `compare.prev_days` — and `avg_total`, the average of the 3 months before over `compare.avg_months` months with records); with `category`, `category_months` |
 | `GET` | `/api/me-transactions` | `wallet_id`, `month`, `q`, `limit` (≤200), `offset` | Records, newest first; `q` searches notes |
 | `PUT` | `/api/me-transactions` | body: `id`, `exvalue`, `targetdate`, `detail` | Edit a record |
 | `DELETE` | `/api/me-transactions` | `id` | Delete a record |

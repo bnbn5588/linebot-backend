@@ -428,27 +428,39 @@
       fill.style.width = Math.max((Math.abs(c.total) / max) * 100, 1.5) + "%";
       track.append(fill);
       b.append(el("span", "n", `${c.icon} ${c.label}`), v, track);
-      const d = compareText(c);
-      if (d) b.append(el("span", "d", d));
+      for (const line of compareLines(c)) b.append(el("span", "d", line));
       b.addEventListener("click", () => setCategoryFilter(state.category && state.category.key === c.key ? null : c));
       li.append(b);
       return li;
     }));
   }
 
-  // "เดือนก่อน 4,400 · ใช้มากขึ้น 18%" - compares sizes (abs), so an expense
-  // that grew reads "ใช้มากขึ้น" and income that grew reads "ได้มากขึ้น".
-  function compareText(c) {
-    if (c.prev_total === null || c.prev_total === undefined) return "";
+  // ["เดือนก่อน (1–13) −4,400 · ▲ ใช้มากขึ้น 18%", "เฉลี่ย 3 เดือน −9,000"]
+  // Compares sizes (abs), so an expense that grew reads "ใช้มากขึ้น" and
+  // income that grew reads "ได้มากขึ้น". For the current month the month
+  // before is cut to the same days so far (compare.prev_days).
+  function compareLines(c) {
+    if (c.prev_total === null || c.prev_total === undefined) return [];
+    const cmp = state.summary.compare || {};
+    const range = cmp.prev_days ? ` (1–${cmp.prev_days})` : "";
     const now = Math.abs(Number(c.total) || 0);
     const before = Math.abs(Number(c.prev_total) || 0);
-    if (!before) return "เดือนก่อนไม่มี";
-    const head = `เดือนก่อน ${money(c.prev_total, true)} · `;
-    const pct = Math.round(((now - before) / before) * 100);
-    if (pct === 0) return head + "เท่าเดิม";
-    const verb = c.kind === "income" ? "ได้" : "ใช้";
-    if (pct >= 1000) return head + `▲ ${verb}มากขึ้น ${Math.round(now / before)} เท่า`;
-    return head + (pct > 0 ? `▲ ${verb}มากขึ้น ${pct}%` : `▼ ${verb}น้อยลง ${-pct}%`);
+    let text;
+    if (!before) text = `เดือนก่อน${range} ไม่มี`;
+    else {
+      text = `เดือนก่อน${range} ${money(c.prev_total, true)} · `;
+      const pct = Math.round(((now - before) / before) * 100);
+      const verb = c.kind === "income" ? "ได้" : "ใช้";
+      if (pct === 0) text += "เท่าเดิม";
+      else if (pct >= 1000) text += `▲ ${verb}มากขึ้น ${Math.round(now / before)} เท่า`;
+      else text += pct > 0 ? `▲ ${verb}มากขึ้น ${pct}%` : `▼ ${verb}น้อยลง ${-pct}%`;
+    }
+    // 1 month of history = the month before itself; 0 says nothing
+    const lines = [text];
+    if (cmp.avg_months >= 2 && Number(c.avg_total)) {
+      lines.push(`เฉลี่ย ${cmp.avg_months} เดือนก่อน ${money(c.avg_total, true)}/เดือน`);
+    }
+    return lines;
   }
 
   function setCategoryFilter(c) {

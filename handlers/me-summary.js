@@ -7,13 +7,22 @@ const { resolveWallet } = require("../components/services");
 const { lineAuth } = require("../components/lineAuth");
 const { typeCondition } = require("../components/utilities");
 const { describe, CATEGORIES } = require("../components/categories");
+// Today in the wallet's time zone (records are stored in wallet-local time).
+function localDate(timeZone) {
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
+}
 const CATEGORY_KEYS = new Set(CATEGORIES.map((c) => c.key));
 
 // GET /api/me-summary?wallet_id=&month=YYYY-MM
 // Dashboard data for one wallet of the signed-in user: overall totals, a row
 // per month (income / expense / balance) and totals by note for `month`
 // (all time when month is omitted), totals by category (with the previous
-// month's total for comparison). With `category`, category_months has the
+// month's total for comparison, same days so far for the current month, and
+// the 3-month average). With `category`, category_months has the
 // per-month rows for that category only.
 module.exports = async (req, res) => {
   if (req.method !== "GET") {
@@ -113,23 +122,51 @@ module.exports = async (req, res) => {
         month ? { ...binds, month } : binds
       );
 
-      // The month before `month`, per category, so the page can show the
-      // change (same NULL -> other rule and type filter as above).
-      let prevCats = null;
+      // Comparison per category (same NULL -> other rule and type filter):
+      // - the month before `month`; when `month` is the wallet's current month
+      //   (not over yet), only its first `days` days, the same days as so far
+      // - the average of the 3 full months before `month`, divided by the
+      //   months the wallet has records in (a new wallet is not averaged
+      //   over empty months)
+      let compare = null;
+      const prevTotal = new Map();
+      const avgTotal = new Map();
       if (month) {
-        prevCats = await executeQuery(
+        const today = localDate(wallet.timezone); // YYYY-MM-DD in the wallet's zone
+        const days = today.slice(0, 7) === month ? Number(today.slice(8, 10)) : null;
+        const catExpr = "NVL(category, CASE WHEN exvalue > 0 THEN 'other_income' ELSE 'other_expense' END)";
+        const prev = await executeQuery(
           connection,
-          `SELECT NVL(category, CASE WHEN exvalue > 0 THEN 'other_income' ELSE 'other_expense' END) AS cat,
-                  sum(exvalue)
+          `SELECT ${catExpr}, sum(exvalue)
              FROM expense
             WHERE uname = :uname AND wallet_id = :wallet_id
               AND fulldate >= ADD_MONTHS(TO_DATE(:month, 'YYYY-MM'), -1)
-              AND fulldate < TO_DATE(:month, 'YYYY-MM')${typeSql}
-            GROUP BY NVL(category, CASE WHEN exvalue > 0 THEN 'other_income' ELSE 'other_expense' END)`,
+              AND fulldate < LEAST(ADD_MONTHS(TO_DATE(:month, 'YYYY-MM'), -1) + :days, TO_DATE(:month, 'YYYY-MM'))${typeSql}
+            GROUP BY ${catExpr}`,
+          { ...binds, month, days: days || 31 }
+        );
+        for (const r of prev.rows) prevTotal.set(r[0], r[1]);
+        const range = `fulldate >= ADD_MONTHS(TO_DATE(:month, 'YYYY-MM'), -3) AND fulldate < TO_DATE(:month, 'YYYY-MM')`;
+        const n = await executeQuery(
+          connection,
+          `SELECT count(DISTINCT TO_CHAR(fulldate, 'YYYY-MM')) FROM expense
+            WHERE uname = :uname AND wallet_id = :wallet_id AND ${range}`,
           { ...binds, month }
         );
+        const avgMonths = n.rows[0][0] || 0;
+        if (avgMonths) {
+          const avg = await executeQuery(
+            connection,
+            `SELECT ${catExpr}, sum(exvalue)
+               FROM expense
+              WHERE uname = :uname AND wallet_id = :wallet_id AND ${range}${typeSql}
+              GROUP BY ${catExpr}`,
+            { ...binds, month }
+          );
+          for (const r of avg.rows) avgTotal.set(r[0], Math.round((r[1] / avgMonths) * 100) / 100);
+        }
+        compare = { prev_days: days, avg_months: avgMonths };
       }
-      const prevTotal = new Map((prevCats ? prevCats.rows : []).map((r) => [r[0], r[1]]));
 
       // With a category picked: the same per-month rows for that category
       // only (chart + month table follow the category, like the by-note list).
@@ -175,13 +212,18 @@ module.exports = async (req, res) => {
           type: type || "all",
           category: category || null,
           by_note: notes.rows.map((r) => ({ note: r[0], total: r[1], count: r[2] })),
-          // prev_total: the same category in the month before (0 = none; null = no month)
+          // prev_total: the same category in the month before (0 = none; null = no month);
+          // avg_total: its average over the 3 months before
           by_category: cats.rows.map((r) => ({
             ...describe(r[0], r[3]),
             total: r[1],
             count: r[2],
             prev_total: month ? prevTotal.get(r[0]) || 0 : null,
+            avg_total: compare && compare.avg_months ? avgTotal.get(r[0]) || 0 : null,
           })),
+          // prev_days: month is not over yet, prev_total covers days 1..prev_days
+          // of the month before; avg_months: months averaged for avg_total
+          compare,
           category_months: categoryMonths ? monthRows(categoryMonths) : null, // same shape as months
         },
       });
