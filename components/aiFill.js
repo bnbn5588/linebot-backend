@@ -29,30 +29,37 @@ async function withConnection(fn) {
   }
 }
 
-async function aiFill({ uname, id, note, amount }) {
+// Would aiFill ask Gemini for this note? null = yes, else { skipped }.
+// /api/add calls it before replying, so the bot only says "AI is sorting
+// this" when it really will.
+async function aiSkipReason(connection, note, amount) {
   if (!ai.enabled()) return { skipped: "NO_KEY" };
   const key = noteKey(note);
   if (!key) return { skipped: "EMPTY" };
+  const existing = await executeQuery(
+    connection,
+    "SELECT 1 FROM category_map WHERE note_key = :note_key AND kind = :kind",
+    { note_key: key, kind: kindOf(amount) }
+  );
+  if (existing.rows.length) return { skipped: "KNOWN" };
+  const today = await executeQuery(
+    connection,
+    `SELECT count(*) FROM category_map WHERE updated_by = 'auto' AND updated_at >= ${TH_TODAY_START_UTC}`, // per Thai day
+    []
+  );
+  if (today.rows[0][0] >= DAILY_CAP) {
+    console.warn(`aiFill: daily cap ${DAILY_CAP} reached`);
+    return { skipped: "CAP" };
+  }
+  return null;
+}
+
+async function aiFill({ uname, id, note, amount }) {
+  const key = noteKey(note);
   const kind = kindOf(amount);
   try {
-    const skip = await withConnection(async (connection) => {
-      const existing = await executeQuery(
-        connection,
-        "SELECT 1 FROM category_map WHERE note_key = :note_key AND kind = :kind",
-        { note_key: key, kind }
-      );
-      if (existing.rows.length) return { skipped: "KNOWN" };
-      const today = await executeQuery(
-        connection,
-        `SELECT count(*) FROM category_map WHERE updated_by = 'auto' AND updated_at >= ${TH_TODAY_START_UTC}`, // per Thai day
-        []
-      );
-      if (today.rows[0][0] >= DAILY_CAP) {
-        console.warn(`aiFill: daily cap ${DAILY_CAP} reached`);
-        return { skipped: "CAP" };
-      }
-      return null;
-    });
+    // checked again: another record may have asked meanwhile
+    const skip = await withConnection((connection) => aiSkipReason(connection, note, amount));
     if (skip) return skip;
 
     let s;
@@ -94,4 +101,4 @@ async function aiFill({ uname, id, note, amount }) {
   }
 }
 
-module.exports = { aiFill, DAILY_CAP };
+module.exports = { aiFill, aiSkipReason, DAILY_CAP };

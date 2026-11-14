@@ -7,7 +7,7 @@ const apiKeyMiddleware = require("../apiKeyMiddleware");
 const oracledb = require("oracledb");
 const { categorize, describe } = require("../components/categories");
 const { afterResponse } = require("../components/background");
-const { aiFill } = require("../components/aiFill");
+const { aiFill, aiSkipReason } = require("../components/aiFill");
 const { parseAmount, isMissing, isValidDateTime, isTextWithin } = require("../components/utilities");
 
 module.exports = async (req, res) => {
@@ -90,9 +90,12 @@ module.exports = async (req, res) => {
 
       if (insertResult.rowsAffected > 0) {
         // Nothing found a category: ask AI after responding (components/aiFill.js)
+        // ai_pending tells the bot to say so, so the user need not fix it by hand.
+        let aiPending = false;
         if (cat.source === "fallback") {
+          aiPending = !(await aiSkipReason(connection, storedNote, parsedValue));
           const id = insertResult.outBinds.id[0];
-          await afterResponse(() => aiFill({ uname, id, note: storedNote, amount: parsedValue }));
+          if (aiPending) await afterResponse(() => aiFill({ uname, id, note: storedNote, amount: parsedValue }));
         }
         const db_datefmt = "YYYY-MM-DD";
         const db_monthfmt = "YYYY-MM";
@@ -128,7 +131,7 @@ module.exports = async (req, res) => {
             wallet_id: wallet_id,
             exvalue: parsedValue,
             detail: storedNote,
-            category: { ...describe(cat.category, parsedValue), source: cat.source },
+            category: { ...describe(cat.category, parsedValue), source: cat.source, ...(aiPending ? { ai_pending: true } : {}) },
             targetdate: date,
             sum_day: records1.rows[0][1],
             targetmonth: records2.rows[0][0],
