@@ -11,7 +11,7 @@ const CATEGORY_KEYS = new Set(CATEGORIES.map((c) => c.key));
 
 // /api/me-transactions — the signed-in user's records.
 //   GET    ?wallet_id=&month=YYYY-MM&q=text&limit=50&offset=0   list (newest first)
-//          &type=income|expense&category=<key>
+//          &type=income|expense&category=<key>&note=<by-note key, exact>
 //   PUT    body { id, exvalue, targetdate: "YYYY-MM-DD HH:MM:SS", detail, category? }   edit
 //   DELETE ?id=   delete
 // Every statement is scoped by uname from the verified LINE token, so a user
@@ -24,7 +24,7 @@ function badRequest(res, message) {
 }
 
 async function list(req, res, connection, uname) {
-  const { wallet_id, month, q, type, category, id } = req.query;
+  const { wallet_id, month, q, type, category, id, note } = req.query;
   const typeSql = typeCondition(type);
   if (typeSql === null) {
     return badRequest(res, "Parameter 'type' must be 'income', 'expense' or 'all'.");
@@ -66,6 +66,14 @@ async function list(req, res, connection, uname) {
         ? " AND (category = :category OR (category IS NULL AND exvalue > 0))"
         : " AND category = :category";
     binds.category = category;
+  }
+  if (note !== undefined && note !== "") {
+    // exact note, the same key as me-summary's by-note list (lower-case, trimmed)
+    if (typeof note !== "string" || note.length > 500) {
+      return badRequest(res, "Parameter 'note' is too long.");
+    }
+    filters += " AND lower(trim(note)) = :note_key";
+    binds.note_key = note.trim().toLowerCase();
   }
   if (q && q.length > 100) {
     return badRequest(res, "Parameter 'q' is too long.");

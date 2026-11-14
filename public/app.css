@@ -97,7 +97,7 @@ select, input {
 .filter label:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
 .card { position: relative; background: var(--surface-1); border: 1px solid var(--border); border-radius: 14px; padding: 12px; margin-bottom: 12px; }
 .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
-.legend[hidden] { display: none; }
+.legend[hidden], .chip-row[hidden] { display: none; }
 .legend { display: flex; gap: 12px; font-size: 12px; color: var(--text-secondary); }
 .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
 .swatch.pos { background: var(--pos); }
@@ -145,7 +145,7 @@ select, input {
 .cats li button:focus-visible { outline: 2px solid var(--focus); border-radius: 6px; }
 .cats li.on .n { font-weight: 700; }
 .cats .d { grid-column: 1 / -1; color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-.chip-row { margin: 0 0 8px; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
 .chip { font: inherit; font-size: 13px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-primary); border-radius: 999px; padding: 6px 12px; min-height: 32px; cursor: pointer; }
 .field select { width: 100%; font-size: 16px; }
 .memory summary { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; cursor: pointer; list-style: none; }

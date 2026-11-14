@@ -32,6 +32,7 @@
     type: "all",
     categories: [],
     category: null,
+    note: null, // { key, kind } picked in the by-note list
   };
 
   // ---------- helpers
@@ -229,7 +230,7 @@
 
   // ---------- summary
   async function loadSummary() {
-    const data = await api("me-summary?" + q({ wallet_id: state.wallet.wallet_id, month: state.month, type: state.type, category: state.category ? state.category.key : "" }));
+    const data = await api("me-summary?" + q({ wallet_id: state.wallet.wallet_id, month: state.month, type: state.type, category: state.category ? state.category.key : "", note: state.note ? state.note.key : "" }));
     state.summary = data;
     renderTiles();
     renderChart();
@@ -254,14 +255,16 @@
   // Chart + month table follow the category picked in "แยกตามหมวด"
   // (tiles stay the wallet's totals).
   function seriesMonths() {
-    return state.summary.category_months || state.summary.months;
+    return state.summary.filter_months || state.summary.category_months || state.summary.months;
   }
   function seriesRow(ym) {
     return seriesMonths().find((m) => m.month === ym) || { month: ym, income: 0, expense: 0, balance: 0, count: 0 };
   }
-  // With an expense/income category and "ทั้งหมด", show that kind instead of the balance
+  // With an expense/income category or note and "ทั้งหมด", show that kind instead of the balance
   function chartType() {
-    return state.type === "all" && state.category ? state.category.kind : state.type;
+    if (state.type !== "all") return state.type;
+    if (state.note) return state.note.kind;
+    return state.category ? state.category.kind : "all";
   }
 
   function chartWindow() {
@@ -284,7 +287,8 @@
     const ih = H - pad.t - pad.b;
     const T = TYPES[chartType()];
     const cat = state.category ? ` · ${state.category.icon} ${state.category.label}` : "";
-    $("chartTitle").textContent = T.title + cat;
+    const note = state.note ? ` · 📝 ${clipText(state.note.key, 24)}` : "";
+    $("chartTitle").textContent = T.title + cat + note;
     $("chartLegend").hidden = chartType() !== "all";
     const vals = rows.map((r) => r[T.field]);
     const step = niceStep((Math.max(0, ...vals) - Math.min(0, ...vals)) / 3 || 1);
@@ -390,7 +394,11 @@
     const max = Math.max(...notes.map((n) => Math.abs(n.total))) || 1;
     const shown = notes.slice(0, 15);
     const items = shown.map((n) => {
-      const li = el("li");
+      const on = !!state.note && state.note.key === n.note;
+      const li = el("li", on ? "on" : "");
+      const b = el("button");
+      b.type = "button";
+      b.setAttribute("aria-pressed", on ? "true" : "false");
       const name = el("span", "n", n.note || "-");
       const v = el("span", "v", money(n.total, true));
       const c = el("span", "c", ` ×${n.count}`);
@@ -399,7 +407,11 @@
       const fill = el("div", "fill " + (n.total >= 0 ? "pos" : "neg"));
       fill.style.width = Math.max((Math.abs(n.total) / max) * 100, 1.5) + "%";
       track.append(fill);
-      li.append(name, v, track);
+      b.append(name, v, track);
+      const kind = n.total > 0 ? "income" : "expense";
+      for (const line of compareLines({ ...n, kind }, true)) b.append(el("span", "d", line));
+      b.addEventListener("click", () => setNoteFilter(on ? null : { key: n.note, kind }));
+      li.append(b);
       return li;
     });
     if (notes.length > shown.length) items.push(el("li", "empty", `และอีก ${notes.length - shown.length} โน้ต`));
@@ -439,7 +451,8 @@
   // Compares sizes (abs), so an expense that grew reads "ใช้มากขึ้น" and
   // income that grew reads "ได้มากขึ้น". For the current month the month
   // before is cut to the same days so far (compare.prev_days).
-  function compareLines(c) {
+  // quiet: say nothing when there is nothing to compare (one-off notes)
+  function compareLines(c, quiet = false) {
     if (c.prev_total === null || c.prev_total === undefined) return [];
     const cmp = state.summary.compare || {};
     const range = cmp.prev_days ? ` (1–${cmp.prev_days})` : "";
@@ -456,25 +469,49 @@
       else text += pct > 0 ? `▲ ${verb}มากขึ้น ${pct}%` : `▼ ${verb}น้อยลง ${-pct}%`;
     }
     // 1 month of history = the month before itself; 0 says nothing
-    const lines = [text];
+    const lines = quiet && !before ? [] : [text];
     if (cmp.avg_months >= 2 && Number(c.avg_total)) {
       lines.push(`เฉลี่ย ${cmp.avg_months} เดือนก่อน ${money(c.avg_total, true)}/เดือน`);
     }
     return lines;
   }
 
+  // Picking a category clears the note: the note list changes with it.
   function setCategoryFilter(c) {
     state.category = c ? { key: c.key, label: c.label, icon: c.icon, kind: c.kind } : null;
-    showCategoryChips();
+    state.note = null;
+    showFilterChips();
     // Reload the summary too: the by-note list follows the category
     run(loadAll);
   }
 
-  function showCategoryChips() {
-    const label = state.category ? `${state.category.icon} ${state.category.label}  ✕` : "";
-    for (const [row, chip] of [["chartChipRow", "chartChip"], ["catChipRow", "catChip"], ["noteChipRow", "noteChip"]]) {
-      $(row).hidden = !state.category;
-      $(chip).textContent = label;
+  function setNoteFilter(n) {
+    state.note = n;
+    showFilterChips();
+    run(loadAll);
+  }
+
+  function clipText(t, n) {
+    const chars = [...String(t)];
+    return chars.length > n ? chars.slice(0, n - 1).join("") + "…" : chars.join("");
+  }
+
+  // One ✕ chip per active filter. The by-note card shows only the category
+  // chip (its list is narrowed by category; the picked note is highlighted).
+  function showFilterChips() {
+    const chip = (text, label, onClick) => {
+      const b = el("button", "chip", text + "  ✕");
+      b.type = "button";
+      b.setAttribute("aria-label", label);
+      b.addEventListener("click", onClick);
+      return b;
+    };
+    const catChip = () => state.category && chip(`${state.category.icon} ${state.category.label}`, "ล้างตัวกรองหมวด", () => setCategoryFilter(null));
+    const noteChip = () => state.note && chip(`📝 ${clipText(state.note.key, 24)}`, "ล้างตัวกรองโน้ต", () => setNoteFilter(null));
+    for (const [row, chips] of [["chartChipRow", [catChip(), noteChip()]], ["catChipRow", [catChip(), noteChip()]], ["noteChipRow", [catChip()]]]) {
+      const list = chips.filter(Boolean);
+      $(row).replaceChildren(...list);
+      $(row).hidden = !list.length;
     }
   }
 
@@ -552,6 +589,7 @@
       q: state.q.trim(),
       type: state.type,
       category: state.category ? state.category.key : "",
+      note: state.note ? state.note.key : "",
       limit: PAGE,
       offset: state.offset,
     }));
@@ -715,8 +753,10 @@
       store.set("type", e.target.value);
       if (state.category && state.type !== "all" && state.category.kind !== state.type) {
         state.category = null;
-        showCategoryChips();
+        state.note = null;
       }
+      if (state.note && state.type !== "all" && state.note.kind !== state.type) state.note = null;
+      showFilterChips();
       hideTip();
       run(loadAll);
     });
@@ -725,6 +765,8 @@
   $("walletSelect").addEventListener("change", (e) => {
     state.wallet = state.wallets.find((w) => String(w.wallet_id) === e.target.value) || state.wallet;
     store.set("wallet_id", String(state.wallet.wallet_id));
+    state.note = null; // notes belong to a wallet
+    showFilterChips();
     run(loadAll);
   });
   $("monthInput").addEventListener("change", (e) => {
@@ -738,9 +780,6 @@
       run(() => loadTx(true));
     }, 300);
   });
-  $("catChip").addEventListener("click", () => setCategoryFilter(null));
-  $("noteChip").addEventListener("click", () => setCategoryFilter(null));
-  $("chartChip").addEventListener("click", () => setCategoryFilter(null));
   $("memoryCard").addEventListener("toggle", () => { if ($("memoryCard").open) run(loadMemory); });
   $("more").addEventListener("click", () => run(() => loadTx(false)));
   $("editForm").addEventListener("submit", save);

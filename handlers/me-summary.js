@@ -23,13 +23,21 @@ const CATEGORY_KEYS = new Set(CATEGORIES.map((c) => c.key));
 // (all time when month is omitted), totals by category (with the previous
 // month's total for comparison, same days so far for the current month, and
 // the 3-month average). With `category`, category_months has the
-// per-month rows for that category only.
+// per-month rows for that category only. With `note` (a by-note key), the
+// same filter_months narrowed to that note; by_note entries also carry
+// prev_total / avg_total.
 module.exports = async (req, res) => {
   if (req.method !== "GET") {
     return res.status(405).json({ status: "error", message: "Use GET." });
   }
   return lineAuth(req, res, async (uname) => {
-    const { wallet_id, month, type, category } = req.query;
+    const { wallet_id, month, type, category, note } = req.query;
+    if (note !== undefined && (typeof note !== "string" || note.length > 500)) {
+      return res.status(400).json({ status: "error", message: "Parameter 'note' is too long." });
+    }
+    // Same key as the by-note list: lower-case, trimmed
+    const noteKey = note ? note.trim().toLowerCase() : "";
+    const noteFilter = noteKey ? " AND lower(trim(note)) = :note_key" : "";
     if (category !== undefined && category !== "" && !CATEGORY_KEYS.has(category)) {
       return res.status(400).json({ status: "error", message: "Unknown 'category'." });
     }
@@ -122,57 +130,58 @@ module.exports = async (req, res) => {
         month ? { ...binds, month } : binds
       );
 
-      // Comparison per category (same NULL -> other rule and type filter):
+      // Comparison per category and per note (same filters as their lists):
       // - the month before `month`; when `month` is the wallet's current month
       //   (not over yet), only its first `days` days, the same days as so far
       // - the average of the 3 full months before `month`, divided by the
       //   months the wallet has records in (a new wallet is not averaged
       //   over empty months)
       let compare = null;
-      const prevTotal = new Map();
-      const avgTotal = new Map();
+      const catExpr = "NVL(category, CASE WHEN exvalue > 0 THEN 'other_income' ELSE 'other_expense' END)";
+      const empty = () => ({ prev: new Map(), avg: new Map() });
+      let catCmp = empty();
+      let noteCmp = empty();
       if (month) {
         const today = localDate(wallet.timezone); // YYYY-MM-DD in the wallet's zone
         const days = today.slice(0, 7) === month ? Number(today.slice(8, 10)) : null;
-        const catExpr = "NVL(category, CASE WHEN exvalue > 0 THEN 'other_income' ELSE 'other_expense' END)";
-        const prev = await executeQuery(
-          connection,
-          `SELECT ${catExpr}, sum(exvalue)
-             FROM expense
-            WHERE uname = :uname AND wallet_id = :wallet_id
-              AND fulldate >= ADD_MONTHS(TO_DATE(:month, 'YYYY-MM'), -1)
-              AND fulldate < LEAST(ADD_MONTHS(TO_DATE(:month, 'YYYY-MM'), -1) + :days, TO_DATE(:month, 'YYYY-MM'))${typeSql}
-            GROUP BY ${catExpr}`,
-          { ...binds, month, days: days || 31 }
-        );
-        for (const r of prev.rows) prevTotal.set(r[0], r[1]);
-        const range = `fulldate >= ADD_MONTHS(TO_DATE(:month, 'YYYY-MM'), -3) AND fulldate < TO_DATE(:month, 'YYYY-MM')`;
+        const prevRange = `fulldate >= ADD_MONTHS(TO_DATE(:month, 'YYYY-MM'), -1)
+              AND fulldate < LEAST(ADD_MONTHS(TO_DATE(:month, 'YYYY-MM'), -1) + :days, TO_DATE(:month, 'YYYY-MM'))`;
+        const avgRange = "fulldate >= ADD_MONTHS(TO_DATE(:month, 'YYYY-MM'), -3) AND fulldate < TO_DATE(:month, 'YYYY-MM')";
         const n = await executeQuery(
           connection,
           `SELECT count(DISTINCT TO_CHAR(fulldate, 'YYYY-MM')) FROM expense
-            WHERE uname = :uname AND wallet_id = :wallet_id AND ${range}`,
+            WHERE uname = :uname AND wallet_id = :wallet_id AND ${avgRange}`,
           { ...binds, month }
         );
         const avgMonths = n.rows[0][0] || 0;
-        if (avgMonths) {
-          const avg = await executeQuery(
-            connection,
-            `SELECT ${catExpr}, sum(exvalue)
-               FROM expense
-              WHERE uname = :uname AND wallet_id = :wallet_id AND ${range}${typeSql}
-              GROUP BY ${catExpr}`,
-            { ...binds, month }
-          );
-          for (const r of avg.rows) avgTotal.set(r[0], Math.round((r[1] / avgMonths) * 100) / 100);
-        }
+        // sums per group in both ranges; filter = extra SQL, extra = its binds
+        const sums = async (groupExpr, filter, extra) => {
+          const out = empty();
+          const q = (range) => `SELECT ${groupExpr}, sum(exvalue) FROM expense
+             WHERE uname = :uname AND wallet_id = :wallet_id AND ${range}${filter}
+             GROUP BY ${groupExpr}`;
+          const prev = await executeQuery(connection, q(prevRange), { ...binds, ...extra, month, days: days || 31 });
+          for (const r of prev.rows) out.prev.set(r[0], r[1]);
+          if (avgMonths) {
+            const avg = await executeQuery(connection, q(avgRange), { ...binds, ...extra, month });
+            for (const r of avg.rows) out.avg.set(r[0], Math.round((r[1] / avgMonths) * 100) / 100);
+          }
+          return out;
+        };
+        catCmp = await sums(catExpr, typeSql, {});
+        noteCmp = await sums("lower(trim(note))", typeSql + categoryFilter, category ? { category } : {});
         compare = { prev_days: days, avg_months: avgMonths };
       }
+      const cmpFields = (c, key) => ({
+        prev_total: compare ? c.prev.get(key) || 0 : null,
+        avg_total: compare && compare.avg_months ? c.avg.get(key) || 0 : null,
+      });
 
-      // With a category picked: the same per-month rows for that category
-      // only (chart + month table follow the category, like the by-note list).
-      let categoryMonths = null;
-      if (category) {
-        categoryMonths = await executeQuery(
+      // With a category and/or note picked: the same per-month rows for those
+      // records only (chart + month table follow the filter).
+      let filterMonths = null;
+      if (category || note) {
+        filterMonths = await executeQuery(
           connection,
           `SELECT TO_CHAR(fulldate, 'YYYY-MM'),
                   sum(CASE WHEN exvalue > 0 THEN exvalue ELSE 0 END),
@@ -180,10 +189,10 @@ module.exports = async (req, res) => {
                   sum(exvalue),
                   count(*)
              FROM expense
-            WHERE uname = :uname AND wallet_id = :wallet_id${categoryFilter}
+            WHERE uname = :uname AND wallet_id = :wallet_id${categoryFilter}${noteFilter}
             GROUP BY TO_CHAR(fulldate, 'YYYY-MM')
             ORDER BY 1`,
-          { ...binds, category }
+          { ...binds, ...(category ? { category } : {}), ...(note ? { note_key: noteKey } : {}) }
         );
       }
       const monthRows = (r) => r.rows.map((x) => ({ month: x[0], income: x[1], expense: x[2], balance: x[3], count: x[4] }));
@@ -211,20 +220,22 @@ module.exports = async (req, res) => {
           month: month || null,
           type: type || "all",
           category: category || null,
-          by_note: notes.rows.map((r) => ({ note: r[0], total: r[1], count: r[2] })),
+          by_note: notes.rows.map((r) => ({ note: r[0], total: r[1], count: r[2], ...cmpFields(noteCmp, r[0]) })),
           // prev_total: the same category in the month before (0 = none; null = no month);
           // avg_total: its average over the 3 months before
           by_category: cats.rows.map((r) => ({
             ...describe(r[0], r[3]),
             total: r[1],
             count: r[2],
-            prev_total: month ? prevTotal.get(r[0]) || 0 : null,
-            avg_total: compare && compare.avg_months ? avgTotal.get(r[0]) || 0 : null,
+            ...cmpFields(catCmp, r[0]),
           })),
           // prev_days: month is not over yet, prev_total covers days 1..prev_days
           // of the month before; avg_months: months averaged for avg_total
           compare,
-          category_months: categoryMonths ? monthRows(categoryMonths) : null, // same shape as months
+          note: note ? noteKey : null,
+          // per-month rows for the picked category and/or note (same shape as months)
+          filter_months: filterMonths ? monthRows(filterMonths) : null,
+          category_months: filterMonths ? monthRows(filterMonths) : null, // old name, for pages still open
         },
       });
     } catch (error) {
