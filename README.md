@@ -63,6 +63,8 @@ x-api-key: <API_KEY>
 | `POST` | `/api/changeWallet` | body: `uname`, `wallet_id` | Switch the current wallet |
 | `GET` | `/api/help` | `lang` (`th` or `en`) | Help content as cards (shown by the bot's `help` / `ช่วยเหลือ`); edit it in `components/help.js` |
 | `POST` | `/api/ai-sweep` | body: optional `days`, `max` | Ask Gemini again for recent "other" records (see [Admin website](#admin-website)) |
+| `POST` | `/api/monthly-summary` | body: optional `month`, `only`, `force`, `dry_run` | Push last month's summary to every user (see [Monthly summary](#monthly-summary)) |
+| `POST` | `/api/summarySetting` | body: `uname`, `on` (true/false) | Monthly summary on/off (the bot's "เปิด/ปิดสรุปรายเดือน") |
 | `GET` | `/api/ping` | – | Keep-warm check: runs `SELECT 1 FROM DUAL`, returns `db_ms` |
 | `GET` | `/api/admin-overview` | – | Admin site data (LINE ID token of an admin, see [Admin website](#admin-website)) |
 | `GET` `PUT` `DELETE` | `/api/admin-category-map` | PUT `note`, `category`; DELETE `note_key`, `kind` | Shared note → category mapping for all users (admin only) |
@@ -194,6 +196,24 @@ Google Cloud, OCI and LINE consoles.
   (`components/thaiTime.js`); "today" (AI cap, usage, 7/30-day counts) is the
   Thai day. Record dates (`EXPENSE.fulldate`) are the wallet's local time as
   entered and are shown as they are.
+
+## Monthly summary
+
+`components/monthlySummary.js`, migration 005 (`USERS.summary_off`,
+`USERS.summary_sent`). On the 1st at 09:00 Thai time the server cron runs
+`scripts/monthly-summary.sh` (`0 2 1 * *`, log `~/devbox/monthly-summary.log`),
+which calls `POST /api/monthly-summary`. Every user with records in the month
+before gets one LINE push message: a card per wallet (carousel, up to 5) with
+income, expense, balance, total expense vs the month before, and the 3 expense
+categories with the most spending, each vs the month before. Needs `LB_KEY`
+(the bot's channel access token) in the backend's Vercel env; each user costs
+one message of the LINE OA monthly quota (a 429 stops the run).
+
+- Users turn it off/on in the bot: "ปิดสรุปรายเดือน" / "เปิดสรุปรายเดือน" (or
+  "summary off" / "summary on").
+- `summary_sent` holds the last month sent, so a rerun never sends twice;
+  `force: true` resends, `only: <uname>` sends to one user (tests),
+  `dry_run: true` returns the messages and sends nothing.
 
 ## Requirements
 
