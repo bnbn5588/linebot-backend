@@ -50,7 +50,8 @@ async function list(req, res, connection) {
       rules: adminList(),
       items: r.rows.map(([note_key, kind, category, source, updated_at, records, confidence, model, updated_by]) => ({
         note_key, kind, category, source, updated_at, records, confidence, model,
-        auto: updated_by === "auto",
+        auto: updated_by === "auto" || updated_by === "disputed",
+        disputed: updated_by === "disputed", // a user changed the AI's category by hand
         pending: isPending(source, updated_by, confidence), // AI not sure: not used until an admin confirms
       })),
     },

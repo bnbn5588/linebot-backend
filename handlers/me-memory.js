@@ -5,7 +5,7 @@ const {
 } = require("../components/db");
 const { lineAuth } = require("../components/lineAuth");
 const { thai } = require("../components/thaiTime");
-const { NOTE_KEY_SQL, CATEGORIES, describe, remember } = require("../components/categories");
+const { NOTE_KEY_SQL, CATEGORIES, describe, remember, disputeAi } = require("../components/categories");
 
 // /api/me-memory — the notes whose category the signed-in user has taught.
 //   GET                                   list (with how many records use each note)
@@ -60,6 +60,7 @@ async function update(req, res, connection, uname) {
     return bad(res, "Field 'category' must be a category of the same kind.");
   }
   await remember(connection, uname, note_key, category); // "other" = forget
+  if (category !== current.rows[0][0]) await disputeAi(connection, note_key, category);
   res.status(200).json({ status: "success", data: { note_key, category: describe(category, KIND.get(category) === "income" ? 1 : -1) } });
 }
 

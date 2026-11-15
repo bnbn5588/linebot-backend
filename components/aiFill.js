@@ -44,7 +44,7 @@ async function aiSkipReason(connection, note, amount) {
   if (existing.rows.length) return { skipped: "KNOWN" };
   const today = await executeQuery(
     connection,
-    `SELECT count(*) FROM category_map WHERE updated_by = 'auto' AND updated_at >= ${TH_TODAY_START_UTC}`, // per Thai day
+    `SELECT count(*) FROM category_map WHERE updated_by IN ('auto', 'disputed') AND updated_at >= ${TH_TODAY_START_UTC}`, // per Thai day
     []
   );
   if (today.rows[0][0] >= DAILY_CAP) {

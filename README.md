@@ -62,6 +62,7 @@ x-api-key: <API_KEY>
 | `POST` | `/api/createWallet` | body: `uname`, `wallet_name`, `timezone` | Create a wallet and make it current (one transaction) |
 | `POST` | `/api/changeWallet` | body: `uname`, `wallet_id` | Switch the current wallet |
 | `GET` | `/api/help` | `lang` (`th` or `en`) | Help content as cards (shown by the bot's `help` / `ช่วยเหลือ`); edit it in `components/help.js` |
+| `POST` | `/api/ai-sweep` | body: optional `days`, `max` | Ask Gemini again for recent "other" records (see [Admin website](#admin-website)) |
 | `GET` | `/api/ping` | – | Keep-warm check: runs `SELECT 1 FROM DUAL`, returns `db_ms` |
 | `GET` | `/api/admin-overview` | – | Admin site data (LINE ID token of an admin, see [Admin website](#admin-website)) |
 | `GET` `PUT` `DELETE` | `/api/admin-category-map` | PUT `note`, `category`; DELETE `note_key`, `kind` | Shared note → category mapping for all users (admin only) |
@@ -164,6 +165,18 @@ Google Cloud, OCI and LINE consoles.
   the shared table; below that the row is "AI ไม่แน่ใจ" (pending, not used,
   not asked again) until an admin confirms it on the admin site. Gemini
   errors store nothing, so the next record retries.
+- User corrections: when a user changes a category by hand (LIFF edit, the
+  bot's category picker, or the remembered-notes page) to something other
+  than an automatic AI row's answer, that row becomes "ผู้ใช้แก้หมวด"
+  (`updated_by` `disputed`): not used for anyone, not asked again, until an
+  admin confirms or changes it. Admin and history rows are never touched.
+- Daily catch-up (`components/aiSweep.js`, `POST /api/ai-sweep`, API key,
+  optional body `days` 1-31 default 7, `max` 1-50 default 20): records of the
+  last `days` days still "other" whose note has no shared-table row (Gemini
+  failed or the cap was reached when they were saved) are asked again, once
+  per note, with the same rules and daily cap; QUOTA stops the run. Returns
+  counts only. Server cron runs `scripts/ai-sweep.sh` at 03:00 Thai time
+  (`0 20 * * *`), log `~/devbox/ai-sweep.log`.
 - Gemini usage (card "Gemini (AI จัดหมวด)" on the admin site, `ai` in
   `/api/admin-overview`): every Gemini question — automatic and "ถาม AI" — adds
   to a per-day counter in `AI_USAGE` (migration 004; origin, outcome, questions,

@@ -11,6 +11,7 @@
 
 const routes = new Map([
   ["add", require("../handlers/add")],
+  ["ai-sweep", require("../handlers/ai-sweep")],
   ["admin-category-guess", require("../handlers/admin-category-guess")],
   ["admin-category-map", require("../handlers/admin-category-map")],
   ["admin-overview", require("../handlers/admin-overview")],

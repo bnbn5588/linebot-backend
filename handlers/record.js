@@ -4,7 +4,7 @@ const {
   closeConnection,
 } = require("../components/db");
 const apiKeyMiddleware = require("../apiKeyMiddleware");
-const { remember, describe, isValidFor, forgetIfUnused } = require("../components/categories");
+const { remember, disputeAi, describe, isValidFor, forgetIfUnused } = require("../components/categories");
 const { isTextWithin } = require("../components/utilities");
 
 // Bot actions on a single record, triggered by buttons on the chat card.
@@ -60,6 +60,7 @@ function handler(action) {
             { category, id: rec.id, uname }
           );
           await remember(connection, uname, rec.note, category);
+          if (category !== rec.category) await disputeAi(connection, rec.note, category);
           return res.status(200).json({
             status: "success",
             data: { id: rec.id, exvalue: rec.exvalue, note: rec.note, category: describe(category, rec.exvalue) },

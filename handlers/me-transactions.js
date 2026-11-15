@@ -6,7 +6,7 @@ const {
 const { resolveWallet } = require("../components/services");
 const { lineAuth } = require("../components/lineAuth");
 const { parseAmount, isValidDateTime, typeCondition } = require("../components/utilities");
-const { categorize, remember, describe, isValidFor, forgetIfUnused, CATEGORIES } = require("../components/categories");
+const { categorize, remember, disputeAi, describe, isValidFor, forgetIfUnused, CATEGORIES } = require("../components/categories");
 const CATEGORY_KEYS = new Set(CATEGORIES.map((c) => c.key));
 
 // /api/me-transactions — the signed-in user's records.
@@ -151,6 +151,8 @@ async function update(req, res, connection, uname) {
   if (category) {
     newCategory = category;
     await remember(connection, uname, note, category);
+    // only a real change (the form also sends the category when it was left as is)
+    if (category !== current.rows[0][0]) await disputeAi(connection, note, category);
   } else if (current.rows[0][0] && isValidFor(current.rows[0][0], value)) {
     newCategory = current.rows[0][0];
   } else {

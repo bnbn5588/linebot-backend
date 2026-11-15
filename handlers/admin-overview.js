@@ -164,9 +164,9 @@ module.exports = async (req, res) => {
       const [aiRows] = await rows(
         connection,
         `SELECT count(CASE WHEN updated_by = 'auto' AND confidence >= :min THEN 1 END),
-                count(CASE WHEN updated_by = 'auto' AND (confidence < :min OR confidence IS NULL) THEN 1 END),
-                count(CASE WHEN updated_by <> 'auto' THEN 1 END),
-                count(CASE WHEN updated_by = 'auto' AND updated_at >= ${TH_TODAY_START_UTC} THEN 1 END)
+                count(CASE WHEN updated_by = 'disputed' OR (updated_by = 'auto' AND (confidence < :min OR confidence IS NULL)) THEN 1 END),
+                count(CASE WHEN updated_by NOT IN ('auto', 'disputed') THEN 1 END),
+                count(CASE WHEN updated_by IN ('auto', 'disputed') AND updated_at >= ${TH_TODAY_START_UTC} THEN 1 END)
            FROM category_map WHERE source = 'ai'`,
         { min: AI_MIN_CONFIDENCE }
       );

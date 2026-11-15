@@ -76,8 +76,12 @@ const BY_KEY = new Map(CATEGORIES.map((c) => [c.key, c]));
 // AI rows added automatically (updated_by 'auto') below this are only
 // suggestions waiting for an admin; they are not used.
 const AI_MIN_CONFIDENCE = 0.7;
+// A user who changed the category the AI gave puts the row back to waiting
+// (updated_by 'disputed', see disputeAi) — also not used until an admin
+// confirms it.
 const isPending = (source, updatedBy, confidence) =>
-  source === "ai" && updatedBy === "auto" && !(Number(confidence) >= AI_MIN_CONFIDENCE);
+  source === "ai" &&
+  (updatedBy === "disputed" || (updatedBy === "auto" && !(Number(confidence) >= AI_MIN_CONFIDENCE)));
 
 const kindOf = (amount) => (amount > 0 ? "income" : "expense");
 const fallbackFor = (amount) => (amount > 0 ? "other_income" : "other_expense");
@@ -289,6 +293,31 @@ async function remember(connection, uname, note, category) {
   );
 }
 
+// A user changed a category by hand (record, or their remembered note) to
+// `category`. If the shared table has an automatic AI answer for this note
+// that says something else, the AI was probably wrong: stop using the row
+// for everyone (updated_by 'disputed' = pending) until an admin confirms or
+// changes it. Admin/history rows and rows an admin saved are never touched.
+// Returns true if a row was put back to waiting.
+async function disputeAi(connection, note, category) {
+  const key = noteKey(note);
+  const kind = BY_KEY.get(category) && BY_KEY.get(category).kind;
+  if (!key || !kind) return false;
+  try {
+    const r = await executeQuery(
+      connection,
+      `UPDATE category_map SET updated_by = 'disputed', updated_at = SYSDATE
+        WHERE note_key = :note_key AND kind = :kind AND source = 'ai'
+          AND updated_by = 'auto' AND category <> :category`,
+      { note_key: key, kind, category }
+    );
+    return r.rowsAffected > 0;
+  } catch (e) {
+    if (e && e.errorNum === 942) return false; // no shared table yet
+    throw e;
+  }
+}
+
 // After a record is deleted: forget the note's category if no other record
 // of this user still has the same note. Returns true if something was forgotten.
 async function forgetIfUnused(connection, uname, note) {
@@ -331,6 +360,7 @@ function publicList() {
 
 module.exports = {
   AI_MIN_CONFIDENCE,
+  disputeAi,
   isPending,
   adminList,
   explain,

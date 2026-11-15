@@ -307,7 +307,7 @@
     $("aiBody").hidden = !u;
     const ans = a.answers;
     const kvRows = [
-      ["คำตอบในตารางกลาง", `ใช้แล้ว ${num.format(ans.used)} · AI ไม่แน่ใจ ${num.format(ans.pending)} · admin บันทึกจาก "ถาม AI" ${num.format(ans.confirmed)}`],
+      ["คำตอบในตารางกลาง", `ใช้แล้ว ${num.format(ans.used)} · รอยืนยัน (AI ไม่แน่ใจ/ผู้ใช้แก้) ${num.format(ans.pending)} · admin บันทึกจาก "ถาม AI" ${num.format(ans.confirmed)}`],
       ["เพดานอัตโนมัติวันนี้", `${num.format(ans.auto_today)} / ${num.format(a.daily_cap)} โน้ตใหม่ (AI_DAILY_CAP)`],
       ["ใช้คำตอบเมื่อมั่นใจ", "≥ " + pct(a.min_confidence)],
     ];
@@ -434,8 +434,9 @@
       });
       const tdSel = el("td"); tdSel.append(sel);
       const tdSrc = el("td");
-      const badge = el("span", "src " + it.source + (it.pending ? " pending" : ""), (it.pending ? "AI ไม่แน่ใจ" : SOURCE_TH[it.source] || it.source) + (it.source === "ai" && it.confidence != null ? ` ${Math.round(it.confidence * 100)}%` : ""));
+      const badge = el("span", "src " + it.source + (it.pending ? " pending" : ""), (it.disputed ? "ผู้ใช้แก้หมวด" : it.pending ? "AI ไม่แน่ใจ" : SOURCE_TH[it.source] || it.source) + (it.source === "ai" && it.confidence != null ? ` ${Math.round(it.confidence * 100)}%` : ""));
       if (it.model) badge.title = it.model + (it.auto ? " · ตอบเองตอนผู้ใช้บันทึก" : "");
+      if (it.disputed) badge.title = `AI ตอบ ${catLabel(it.category)} แต่ผู้ใช้แก้เป็นหมวดอื่นเอง — ไม่ใช้จนกว่า admin จะยืนยันหรือเปลี่ยนหมวด` + (it.model ? " · " + it.model : "");
       tdSrc.append(badge);
       if (it.pending) {
         const ok = el("button", "btn small", "ยืนยัน");
@@ -518,7 +519,7 @@
       if (s.skipped) return "ไม่ได้เลือกผู้ใช้";
       return s.category ? `ผู้ใช้คนนี้เคยตั้ง "${r.note_key}" เป็น ${catText(s.category)}` : "ผู้ใช้คนนี้ไม่เคยตั้งหมวดของโน้ตนี้";
     }
-    if (s.step === "shared" && s.pending) return `AI ไม่แน่ใจ (${Math.round(s.pending.confidence * 100)}%) แนะนำ ${catText(s.pending.category)} — ยังไม่ใช้ รอ admin ยืนยันในตารางกลาง`;
+    if (s.step === "shared" && s.pending) return `AI แนะนำ ${catText(s.pending.category)} (${Math.round(s.pending.confidence * 100)}%) — ยังไม่ใช้ รอ admin ยืนยันในตารางกลาง`;
     if (s.step === "shared") return s.category ? `"${r.note_key}" → ${catText(s.category)} (ที่มา: ${SOURCE_TH[s.source] || s.source})` : "ไม่มีโน้ตนี้ในตาราง (ต้องตรงทั้งข้อความ)";
     if (s.step === "keyword") return s.category ? `เจอคำว่า "${s.word}"${s.field === "places" ? " (ชื่อร้าน/สถานที่)" : ""} → ${catText(s.category)}` : "ไม่เจอคำที่รู้จัก";
     return catText(s.category);
