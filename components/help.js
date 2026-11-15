@@ -54,6 +54,7 @@ const HELP = {
         lines: [
           "🌐 หน้าเว็บ: กราฟ แยกตามหมวด ค้นหา แก้ไขรายการ",
           "📍 สุ่มร้านอาหาร: แชร์ตำแหน่ง หรือกดปุ่ม 📍 ด้านล่างแชท",
+          "📅 สรุปเดือนที่แล้ว: ส่งให้ทุกวันที่ 1 ตอน 9 โมงเช้า (เวลาไทย) พิมพ์ 'ปิดสรุปรายเดือน' เพื่อหยุดรับ หรือ 'เปิดสรุปรายเดือน' เพื่อรับอีกครั้ง",
           "พิมพ์ 'ช่วยเหลือ ข้อความ' เพื่อดูคำอธิบายแบบข้อความ",
         ],
         buttons: [
@@ -103,6 +104,7 @@ const HELP = {
         lines: [
           "🌐 Web app: charts, categories, search, edit records",
           "📍 Random restaurant: share your location or tap 📍 below",
+          "📅 Monthly summary: last month's summary arrives on the 1st at 9:00 (Thai time). Type 'summary off' to stop it, 'summary on' to get it again",
           "Type 'help text' for the plain-text version",
         ],
         buttons: [
