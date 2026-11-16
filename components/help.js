@@ -153,4 +153,4 @@ function helpContent(lang) {
   return { lang: lang === "th" ? "th" : "en", ...h, commands: legacyCommands(h) };
 }
 
-module.exports = { helpContent, HELP };
+module.exports = { helpContent, HELP, WEB_APP_URL };

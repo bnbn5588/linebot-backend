@@ -182,8 +182,12 @@
 
     state.wallets = me.wallets;
     state.categories = me.categories || [];
+    // The monthly summary card opens .../?wallet=<id>&month=YYYY-MM
+    const link = new URLSearchParams(location.search);
+    const linkWallet = me.wallets.find((w) => String(w.wallet_id) === link.get("wallet"));
+    const linkMonth = /^\d{4}-(0[1-9]|1[0-2])$/.test(link.get("month") || "") ? link.get("month") : null;
     const saved = store.get("wallet_id");
-    state.wallet = me.wallets.find((w) => String(w.wallet_id) === saved) || me.current_wallet;
+    state.wallet = linkWallet || me.wallets.find((w) => String(w.wallet_id) === saved) || me.current_wallet;
     const sel = $("walletSelect");
     sel.replaceChildren(...me.wallets.map((w) => {
       const o = el("option", "", `[${w.wallet_id}] ${w.wallet_name || "-"}`);
@@ -191,7 +195,7 @@
       return o;
     }));
     sel.value = String(state.wallet.wallet_id);
-    state.month = currentMonth(state.wallet.timezone);
+    state.month = linkMonth || currentMonth(state.wallet.timezone);
     $("monthInput").value = state.month;
 
     const savedType = store.get("type");

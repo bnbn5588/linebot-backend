@@ -1,6 +1,7 @@
 const crypto = require("crypto");
 const { executeQuery } = require("./db");
 const { describe } = require("./categories");
+const { WEB_APP_URL } = require("./help");
 
 // Monthly summary pushed to each user on the 1st (scripts/monthly-summary.sh
 // → POST /api/monthly-summary). One LINE message per user: a card per wallet
@@ -141,7 +142,10 @@ function bubble(w, month) {
     type: "bubble",
     size: "kilo",
     body: { type: "box", layout: "vertical", spacing: "sm", paddingAll: "16px", contents },
-    footer: { type: "box", layout: "vertical", paddingAll: "8px", paddingTop: "0px", contents: [
+    footer: { type: "box", layout: "vertical", spacing: "xs", paddingAll: "12px", paddingTop: "0px", contents: [
+      // the web app opens on this wallet and month (public/app.js reads ?wallet=&month=)
+      { type: "button", style: "primary", height: "sm", color: "#256abf",
+        action: { type: "uri", label: "📊 ดูรายละเอียดบนเว็บ", uri: `${WEB_APP_URL}?wallet=${encodeURIComponent(w.wallet_id)}&month=${month}` } },
       { type: "button", style: "link", height: "sm", color: "#77766f",
         action: { type: "message", label: "🔕 ปิดสรุปรายเดือน", text: "ปิดสรุปรายเดือน" } },
     ] },
