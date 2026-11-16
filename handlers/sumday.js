@@ -4,7 +4,7 @@ const {
   closeConnection,
 } = require("../components/db");
 const apiKeyMiddleware = require("../apiKeyMiddleware");
-const { checkDateInput } = require("../components/utilities");
+const { checkDateInput, periodRange } = require("../components/utilities");
 
 // Define the API endpoint for summing all expenses
 module.exports = async (req, res) => {
@@ -42,8 +42,9 @@ module.exports = async (req, res) => {
       // Establish a database connection
       connection = await getConnection();
 
-      const sql_select_with_param = `SELECT TO_CHAR(fulldate,'${db_datefmt}'), sum(EXVALUE) from expense where UNAME = :uname and WALLET_ID = :wallet_id and TO_CHAR(fulldate,'${db_datefmt}') = :jdate group by TO_CHAR(fulldate,'${db_datefmt}')`;
-      const data_tuple = [uname, wallet_id, date];
+      const sql_select_with_param = `SELECT TO_CHAR(fulldate,'${db_datefmt}'), sum(EXVALUE) from expense where UNAME = :uname and WALLET_ID = :wallet_id and fulldate >= TO_DATE(:d1,'YYYY-MM-DD') and fulldate < TO_DATE(:d2,'YYYY-MM-DD') group by TO_CHAR(fulldate,'${db_datefmt}')`;
+      const range = periodRange(date);
+      const data_tuple = [uname, wallet_id, range.start, range.end];
 
       // Execute the SQL query
       const records = await executeQuery(

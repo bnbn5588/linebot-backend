@@ -6,6 +6,12 @@ const apiKeyMiddleware = require("../apiKeyMiddleware");
 module.exports = async (req, res) => {
   apiKeyMiddleware(req, res, async () => {
     const { userid } = req.query; // Get userid from query parameters
+    if (!userid || typeof userid !== "string") {
+      return res.status(400).json({
+        status: "error",
+        message: "Missing required parameter: 'userid'.",
+      });
+    }
 
     let connection;
     try {

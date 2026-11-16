@@ -1,3 +1,25 @@
+// Date range for a 'YYYY', 'YYYY-MM' or 'YYYY-MM-DD' period, as half-open
+// bounds { start, end } ('YYYY-MM-DD'), so SQL can filter with
+// fulldate >= TO_DATE(start) AND fulldate < TO_DATE(end) and use an index
+// instead of TO_CHAR(fulldate) = :period. A shape-valid but impossible date
+// (2026-13, 2026-02-30) gets an empty range: it matches nothing, as before.
+function periodRange(period) {
+  const m = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/.exec(String(period || ""));
+  const empty = { start: "1900-01-01", end: "1900-01-01" };
+  if (!m) return empty;
+  const y = Number(m[1]);
+  const mo = m[2] ? Number(m[2]) : 1;
+  const d = m[3] ? Number(m[3]) : 1;
+  const start = new Date(Date.UTC(y, mo - 1, d));
+  if (start.getUTCFullYear() !== y || start.getUTCMonth() !== mo - 1 || start.getUTCDate() !== d) return empty;
+  const end = new Date(start);
+  if (m[3]) end.setUTCDate(end.getUTCDate() + 1);
+  else if (m[2]) end.setUTCMonth(end.getUTCMonth() + 1);
+  else end.setUTCFullYear(end.getUTCFullYear() + 1);
+  const iso = (x) => x.toISOString().slice(0, 10);
+  return { start: iso(start), end: iso(end) };
+}
+
 function checkDateInput(indate) {
   // Check if input is valid (non-empty and non-null)
   if (!indate) {
@@ -116,5 +138,6 @@ module.exports = {
   parseAmount,
   getMRange,
   checkDateInput,
+  periodRange,
   helpCommand,
 };

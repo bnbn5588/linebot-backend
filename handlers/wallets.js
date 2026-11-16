@@ -5,6 +5,12 @@ const apiKeyMiddleware = require("../apiKeyMiddleware");
 module.exports = async (req, res) => {
   apiKeyMiddleware(req, res, async () => {
     const { userid } = req.query; // Vercel passes query params via req.query
+    if (!userid || typeof userid !== "string") {
+      return res.status(400).json({
+        status: "error",
+        message: "Missing required parameter: 'userid'.",
+      });
+    }
 
     let connection;
 

@@ -9,7 +9,7 @@ const { categorize, describe } = require("../components/categories");
 const { afterResponse } = require("../components/background");
 const { aiFill, aiSkipReason } = require("../components/aiFill");
 const { budgetAlert } = require("../components/budget");
-const { parseAmount, isMissing, isValidDateTime, isTextWithin } = require("../components/utilities");
+const { parseAmount, isMissing, isValidDateTime, isTextWithin, periodRange } = require("../components/utilities");
 
 module.exports = async (req, res) => {
   apiKeyMiddleware(req, res, async () => {
@@ -101,14 +101,16 @@ module.exports = async (req, res) => {
         const db_datefmt = "YYYY-MM-DD";
         const db_monthfmt = "YYYY-MM";
 
-        const sql_select_with_param1 = `SELECT TO_CHAR(fulldate,'${db_datefmt}'), sum(EXVALUE) from expense where UNAME = :uname and WALLET_ID = :wallet_id and TO_CHAR(fulldate,'${db_datefmt}') = :jdate group by TO_CHAR(fulldate,'${db_datefmt}')`;
-        const sql_select_with_param2 = `SELECT TO_CHAR(fulldate,'${db_monthfmt}'), sum(EXVALUE) from expense where UNAME = :uname and WALLET_ID = :wallet_id and TO_CHAR(fulldate,'${db_monthfmt}') = :jdate group by TO_CHAR(fulldate,'${db_monthfmt}')`;
+        const sql_select_with_param1 = `SELECT TO_CHAR(fulldate,'${db_datefmt}'), sum(EXVALUE) from expense where UNAME = :uname and WALLET_ID = :wallet_id and fulldate >= TO_DATE(:d1,'YYYY-MM-DD') and fulldate < TO_DATE(:d2,'YYYY-MM-DD') group by TO_CHAR(fulldate,'${db_datefmt}')`;
+        const sql_select_with_param2 = `SELECT TO_CHAR(fulldate,'${db_monthfmt}'), sum(EXVALUE) from expense where UNAME = :uname and WALLET_ID = :wallet_id and fulldate >= TO_DATE(:d1,'YYYY-MM-DD') and fulldate < TO_DATE(:d2,'YYYY-MM-DD') group by TO_CHAR(fulldate,'${db_monthfmt}')`;
 
         const date = targetdate.split(" ")[0];
         const yearMonth = date.slice(0, 7);
 
-        const data_tuple1 = [uname, wallet_id, date];
-        const data_tuple2 = [uname, wallet_id, yearMonth];
+        const r1 = periodRange(date);
+        const r2 = periodRange(yearMonth);
+        const data_tuple1 = [uname, wallet_id, r1.start, r1.end];
+        const data_tuple2 = [uname, wallet_id, r2.start, r2.end];
 
         // Execute the SQL query
         const records1 = await executeQuery(

@@ -1,3 +1,4 @@
+const { periodRange } = require("../components/utilities");
 const {
   executeQuery,
   getConnection,
@@ -39,8 +40,9 @@ module.exports = async (req, res) => {
         data_tuple = [uname, wallet_id];
       } else {
         sql_select_with_param =
-          "select lower(trim(note)), sum(exvalue), count(*) as count from expense where UNAME = :uname and WALLET_ID = :wallet_id and TO_CHAR(fulldate,'YYYY-MM') = :month group by lower(trim(note)) order by 2 asc";
-        data_tuple = [uname, wallet_id, month];
+          "select lower(trim(note)), sum(exvalue), count(*) as count from expense where UNAME = :uname and WALLET_ID = :wallet_id and fulldate >= TO_DATE(:d1,'YYYY-MM-DD') and fulldate < TO_DATE(:d2,'YYYY-MM-DD') group by lower(trim(note)) order by 2 asc";
+        const range = periodRange(month);
+        data_tuple = [uname, wallet_id, range.start, range.end];
       }
 
       // Execute the SQL query
