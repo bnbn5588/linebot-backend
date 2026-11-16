@@ -17,6 +17,6 @@
     "oracledb": "^6.6.0"
   },
   "devDependencies": {
-    "express": "^4.21.1"
+    "express": "^4.22.3"
   }
 }

@@ -32,7 +32,7 @@ module.exports = async (req, res) => {
           data: responseMessage,
         });
       } else {
-        console.log("No wallets found for userid:", userid);
+        console.log("No wallets found for user …" + String(userid).slice(-6));
         res.status(404).json({
           status: "error",
           message: "No wallets found for the user",
