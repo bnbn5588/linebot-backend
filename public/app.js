@@ -221,6 +221,48 @@
     try { history.replaceState(null, "", location.pathname); } catch { /* ignore */ }
   }
 
+  // CSV of the selected wallet + month (all records; list filters do not apply).
+  // fetch with the token, then save via a temporary <a download>.
+  async function exportCsv() {
+    const btn = $("exportCsv");
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "กำลังสร้างไฟล์…";
+    try {
+      const r = await fetch("/api/me-export?" + q({ wallet_id: state.wallet.wallet_id, month: state.month }), {
+        headers: { Authorization: "Bearer " + state.token },
+      });
+      if (r.status === 401) {
+        reauth();
+        return;
+      }
+      if (!r.ok) {
+        let j = null;
+        try { j = await r.json(); } catch { /* not JSON */ }
+        showToast(r.status === 413 && j && j.message ? j.message : "ส่งออกไม่สำเร็จ ลองใหม่อีกครั้ง");
+        return;
+      }
+      if (r.headers.get("X-Row-Count") === "0") {
+        showToast("เดือนนี้ไม่มีรายการให้ส่งออก");
+        return;
+      }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `expenses-${state.wallet.wallet_id}-${state.month}.csv`;
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch {
+      showToast("ส่งออกไม่สำเร็จ ลองใหม่อีกครั้ง");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+  }
+
   function showToast(msg) {
     const t = el("div", "toast", msg);
     t.setAttribute("role", "status");
@@ -875,6 +917,7 @@
   });
   $("memoryCard").addEventListener("toggle", () => { if ($("memoryCard").open) run(loadMemory); });
   $("more").addEventListener("click", () => run(() => loadTx(false)));
+  $("exportCsv").addEventListener("click", exportCsv);
   $("editForm").addEventListener("submit", save);
   $("btnCancel").addEventListener("click", closeEditor);
   $("btnDelete").addEventListener("click", remove);

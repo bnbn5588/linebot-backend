@@ -22,6 +22,7 @@ const routes = new Map([
   ["help", require("../handlers/help")],
   ["me", require("../handlers/me")],
   ["me-budget", require("../handlers/me-budget")],
+  ["me-export", require("../handlers/me-export")],
   ["me-memory", require("../handlers/me-memory")],
   ["me-summary", require("../handlers/me-summary")],
   ["me-transactions", require("../handlers/me-transactions")],
