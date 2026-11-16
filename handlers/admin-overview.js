@@ -7,7 +7,7 @@ const { adminAuth } = require("../components/adminAuth");
 const { adminCors } = require("../components/adminCors");
 const ai = require("../components/ai");
 const { usageSummary } = require("../components/aiUsage");
-const { TH_TODAY, TH_TODAY_START_UTC } = require("../components/thaiTime");
+const { TH_TODAY, TH_TODAY_START_UTC, recordsInThaiTime } = require("../components/thaiTime");
 const { DAILY_CAP } = require("../components/aiFill");
 const { AI_MIN_CONFIDENCE } = require("../components/categories");
 const { lastMonth } = require("../components/monthlySummary");
@@ -90,16 +90,21 @@ module.exports = async (req, res) => {
       await executeQuery(connection, "SELECT 1 FROM DUAL", []);
       const tPing = Date.now() - t1;
 
+      // Record times are each wallet's local time; shown here in Thai time.
+      const tzs = (await rows(connection, "SELECT DISTINCT timezone FROM wallet")).map((r) => r[0]);
+      const { sql: REC, binds: recBinds } = recordsInThaiTime(tzs);
+
       const [counts] = await rows(
         connection,
         `SELECT (SELECT count(*) FROM users),
                 (SELECT count(*) FROM wallet),
                 (SELECT count(*) FROM expense),
-                (SELECT count(*) FROM expense WHERE fulldate >= ${TH_TODAY} - 6),
-                (SELECT count(*) FROM expense WHERE fulldate >= ${TH_TODAY} - 29),
-                (SELECT count(DISTINCT uname) FROM expense WHERE fulldate >= ${TH_TODAY} - 6),
-                (SELECT count(DISTINCT uname) FROM expense WHERE fulldate >= ${TH_TODAY} - 29)
-           FROM dual`
+                (SELECT count(*) FROM ${REC} WHERE fulldate >= ${TH_TODAY} - 6),
+                (SELECT count(*) FROM ${REC} WHERE fulldate >= ${TH_TODAY} - 29),
+                (SELECT count(DISTINCT uname) FROM ${REC} WHERE fulldate >= ${TH_TODAY} - 6),
+                (SELECT count(DISTINCT uname) FROM ${REC} WHERE fulldate >= ${TH_TODAY} - 29)
+           FROM dual`,
+        recBinds
       );
 
       // Per user: activity only (no amounts). Users who only have a wallet
@@ -120,26 +125,29 @@ module.exports = async (req, res) => {
                              min(fulldate) AS first_date,
                              max(fulldate) AS last_date,
                              max(trans_id) AS max_id
-                        FROM expense GROUP BY uname) e
+                        FROM ${REC} GROUP BY uname) e
              ON e.uname = w.uname
-          ORDER BY e.max_id DESC NULLS LAST`
+          ORDER BY e.max_id DESC NULLS LAST`,
+        recBinds
       );
 
       const daily = await rows(
         connection,
         `SELECT TO_CHAR(TRUNC(fulldate), 'YYYY-MM-DD'), count(*), count(DISTINCT uname)
-           FROM expense
+           FROM ${REC}
           WHERE fulldate >= ${TH_TODAY} - 59 AND fulldate < ${TH_TODAY} + 1
           GROUP BY TRUNC(fulldate)
-          ORDER BY 1`
+          ORDER BY 1`,
+        recBinds
       );
 
       const monthly = await rows(
         connection,
         `SELECT TO_CHAR(fulldate, 'YYYY-MM'), count(*), count(DISTINCT uname)
-           FROM expense
+           FROM ${REC}
           GROUP BY TO_CHAR(fulldate, 'YYYY-MM')
-          ORDER BY 1`
+          ORDER BY 1`,
+        recBinds
       );
 
       const segments = await rows(
