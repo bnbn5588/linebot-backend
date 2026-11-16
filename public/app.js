@@ -229,7 +229,83 @@
   }
 
   async function loadAll() {
-    await Promise.all([loadSummary(), loadTx(true)]);
+    await Promise.all([loadSummary(), loadTx(true), loadBudgets()]);
+  }
+
+  // ---------- budgets (per expense category, every month of this wallet)
+  async function loadBudgets() {
+    $("budgetMonth").textContent = monthLabel(state.month);
+    try {
+      state.budgets = (await api("me-budget?" + q({ wallet_id: state.wallet.wallet_id, month: state.month }))).budgets;
+    } catch (e) {
+      if (e instanceof AuthError) return;
+      state.budgets = [];
+      $("budgetList").replaceChildren(el("li", "empty", "โหลดงบไม่สำเร็จ"));
+      return;
+    }
+    renderBudgets();
+  }
+
+  function renderBudgets() {
+    const list = $("budgetList");
+    const items = state.budgets || [];
+    if (!items.length) {
+      list.replaceChildren(el("li", "empty", "ยังไม่ได้ตั้งงบ เลือกหมวดด้านล่างแล้วใส่จำนวน"));
+    } else {
+      list.replaceChildren(...items.map((b) => {
+        const level = b.spent > b.amount ? "over" : b.pct >= 80 ? "near" : "ok";
+        const li = el("li");
+        const btn = el("button");
+        btn.type = "button";
+        btn.setAttribute("aria-label", `แก้งบ ${b.label}`);
+        const v = el("span", "v", `${money(b.spent)} / ${money(b.amount)}`);
+        const track = el("div", "track");
+        const fill = el("div", "fill " + level);
+        fill.style.width = Math.min(Math.max(b.pct, b.spent > 0 ? 1.5 : 0), 100) + "%";
+        track.append(fill);
+        const line = level === "over"
+          ? `⚠️ เกินงบ ${money(b.spent - b.amount)} (${b.pct}%)`
+          : `${level === "near" ? "⚠️ " : ""}ใช้ไป ${b.pct}% · เหลือ ${money(b.amount - b.spent)}`;
+        btn.append(el("span", "n", `${b.icon} ${b.label}`), v, track, el("span", "d " + level, line));
+        btn.addEventListener("click", () => pickBudget(b.key));
+        li.append(btn);
+        return li;
+      }));
+    }
+    const sel = $("bCategory");
+    const keep = sel.value;
+    sel.replaceChildren(...state.categories.filter((c) => c.kind === "expense").map((c) => {
+      const o = el("option", "", `${c.icon} ${c.label}`);
+      o.value = c.key;
+      return o;
+    }));
+    pickBudget(keep || (sel.options[0] && sel.options[0].value), false);
+  }
+
+  // Fill the form with a category's budget (tap a row to change it)
+  function pickBudget(key, focus = true) {
+    const sel = $("bCategory");
+    if (key) sel.value = key;
+    const b = (state.budgets || []).find((x) => x.key === sel.value);
+    $("bAmount").value = b ? String(b.amount) : "";
+    $("bRemove").hidden = !b;
+    $("bSave").textContent = b ? "บันทึกงบ" : "ตั้งงบ";
+    if (focus) $("bAmount").focus();
+  }
+
+  async function saveBudget(amount) {
+    const sel = $("bCategory");
+    const label = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : "";
+    for (const id of ["bSave", "bRemove"]) $(id).disabled = true;
+    try {
+      await api("me-budget", { method: "PUT", body: { wallet_id: state.wallet.wallet_id, category: sel.value, amount } });
+      showToast(amount ? `ตั้งงบ ${label} ${money(amount)} ต่อเดือนแล้ว` : `ลบงบ ${label} แล้ว`);
+      await loadBudgets();
+    } catch (e) {
+      if (!(e instanceof AuthError)) showToast("บันทึกงบไม่สำเร็จ: " + e.message);
+    } finally {
+      for (const id of ["bSave", "bRemove"]) $(id).disabled = false;
+    }
   }
 
   // ---------- summary
@@ -765,6 +841,19 @@
       run(loadAll);
     });
   }
+
+  $("bCategory").addEventListener("change", () => pickBudget(null, false));
+  $("budgetForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const raw = $("bAmount").value.replace(/[,\s]/g, "");
+    const amount = Number(raw);
+    if (!/^\d+(\.\d{1,2})?$/.test(raw) || !(amount > 0) || amount >= 10000000) {
+      showToast("ใส่งบเป็นตัวเลขมากกว่า 0 (ทศนิยมไม่เกิน 2 ตำแหน่ง)");
+      return;
+    }
+    saveBudget(amount);
+  });
+  $("bRemove").addEventListener("click", () => saveBudget(null));
 
   $("walletSelect").addEventListener("change", (e) => {
     state.wallet = state.wallets.find((w) => String(w.wallet_id) === e.target.value) || state.wallet;

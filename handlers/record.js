@@ -5,6 +5,7 @@ const {
 } = require("../components/db");
 const apiKeyMiddleware = require("../apiKeyMiddleware");
 const { remember, disputeAi, describe, isValidFor, forgetIfUnused } = require("../components/categories");
+const { budgetAlert } = require("../components/budget");
 const { isTextWithin } = require("../components/utilities");
 
 // Bot actions on a single record, triggered by buttons on the chat card.
@@ -21,11 +22,11 @@ function bad(res, message) {
 async function findRecord(connection, uname, id) {
   const r = await executeQuery(
     connection,
-    "SELECT trans_id, exvalue, note, category, TO_CHAR(fulldate, 'YYYY-MM-DD HH24:MI') FROM expense WHERE trans_id = :id AND uname = :uname",
+    "SELECT trans_id, exvalue, note, category, TO_CHAR(fulldate, 'YYYY-MM-DD HH24:MI'), wallet_id FROM expense WHERE trans_id = :id AND uname = :uname",
     { id, uname }
   );
   const row = r.rows[0];
-  return row ? { id: row[0], exvalue: row[1], note: row[2], category: row[3], datetime: row[4] } : null;
+  return row ? { id: row[0], exvalue: row[1], note: row[2], category: row[3], datetime: row[4], wallet_id: row[5] } : null;
 }
 
 function handler(action) {
@@ -61,9 +62,13 @@ function handler(action) {
           );
           await remember(connection, uname, rec.note, category);
           if (category !== rec.category) await disputeAi(connection, rec.note, category);
+          // Moving an expense into a category can take its budget past 80% / over
+          const budget = category !== (rec.category || "other_expense")
+            ? await budgetAlert(connection, { uname, walletId: rec.wallet_id, category, date: rec.datetime, added: -rec.exvalue })
+            : null;
           return res.status(200).json({
             status: "success",
-            data: { id: rec.id, exvalue: rec.exvalue, note: rec.note, category: describe(category, rec.exvalue) },
+            data: { id: rec.id, exvalue: rec.exvalue, note: rec.note, category: describe(category, rec.exvalue), ...(budget ? { budget } : {}) },
           });
         }
 

@@ -8,6 +8,7 @@ const oracledb = require("oracledb");
 const { categorize, describe } = require("../components/categories");
 const { afterResponse } = require("../components/background");
 const { aiFill, aiSkipReason } = require("../components/aiFill");
+const { budgetAlert } = require("../components/budget");
 const { parseAmount, isMissing, isValidDateTime, isTextWithin } = require("../components/utilities");
 
 module.exports = async (req, res) => {
@@ -123,6 +124,11 @@ module.exports = async (req, res) => {
           data_tuple2
         );
 
+        // Crossed 80% of this category's budget, or went over it (null if not)
+        const budget = await budgetAlert(connection, {
+          uname, walletId: Number(wallet_id), category: cat.category, date, added: -parsedValue,
+        });
+
         // Success response
         res.status(200).json({
           status: "success",
@@ -136,6 +142,7 @@ module.exports = async (req, res) => {
             sum_day: records1.rows[0][1],
             targetmonth: records2.rows[0][0],
             sum_month: records2.rows[0][1],
+            ...(budget ? { budget } : {}),
           },
         });
       } else {

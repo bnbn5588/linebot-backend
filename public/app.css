@@ -13,6 +13,7 @@
   --accent: #06c755;   /* LINE green, buttons only */
   --accent-ink: #ffffff;
   --danger: #d03b3b;
+  --warn: #b86e00;     /* budget at 80%+ (with a text label) */
   --focus: #2a78d6;
 }
 @media (prefers-color-scheme: dark) {
@@ -31,6 +32,7 @@
     --accent: #06c755;
     --accent-ink: #0b0b0b;
     --danger: #e66767;
+    --warn: #e0a43a;
     --focus: #3987e5;
   }
 }
@@ -48,6 +50,7 @@
   --neg: #e66767;
   --accent-ink: #0b0b0b;
   --danger: #e66767;
+  --warn: #e0a43a;
   --focus: #3987e5;
 }
 
@@ -139,6 +142,16 @@ select, input {
 .notes .fill.pos { background: var(--pos); }
 .notes .fill.neg { background: var(--neg); }
 .notes .c { color: var(--text-muted); font-size: 12px; }
+.budgets .fill.ok { background: var(--pos); }
+.budgets .fill.near { background: var(--warn); }
+.budgets .fill.over { background: var(--danger); }
+.budgets .d.near { color: var(--warn); }
+.budgets .d.over { color: var(--danger); }
+.budget-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 8px; align-items: end; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.budget-form .btn { margin-bottom: 10px; }
+.budget-form .btn[hidden] { display: none; }
+.budget-form:has(#bRemove[hidden]) #bSave { grid-column: 1 / -1; }
+.budget-help { margin: 4px 0 0; font-size: 12px; }
 
 .cats li { padding: 0; }
 .cats li button { all: unset; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; width: 100%; padding: 6px 0; cursor: pointer; }

@@ -77,6 +77,22 @@
         <ul class="notes cats" id="cats"></ul>
       </section>
 
+      <section class="card" id="budgetCard">
+        <div class="card-head"><h2>งบรายเดือน</h2><span class="muted" id="budgetMonth"></span></div>
+        <ul class="notes cats budgets" id="budgetList"></ul>
+        <form class="budget-form" id="budgetForm">
+          <label class="field">หมวด
+            <select id="bCategory"></select>
+          </label>
+          <label class="field">งบต่อเดือน
+            <input id="bAmount" inputmode="decimal" autocomplete="off" placeholder="เช่น 5000">
+          </label>
+          <button type="submit" class="btn primary" id="bSave">ตั้งงบ</button>
+          <button type="button" class="btn danger" id="bRemove" hidden>ลบงบ</button>
+        </form>
+        <p class="muted budget-help">งบใช้ทุกเดือนของกระเป๋านี้ บอทจะเตือนในแชทตอนบันทึกรายจ่ายที่ทำให้ใช้ถึง 80% และเมื่อเกินงบ</p>
+      </section>
+
       <section class="card">
         <div class="card-head"><h2>แยกตามโน้ต</h2><span class="muted" id="noteMonth"></span></div>
         <div class="chip-row" id="noteChipRow" hidden></div>

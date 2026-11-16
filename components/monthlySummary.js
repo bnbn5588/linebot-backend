@@ -2,18 +2,21 @@ const crypto = require("crypto");
 const { executeQuery } = require("./db");
 const { describe } = require("./categories");
 const { WEB_APP_URL } = require("./help");
+const { getBudgets } = require("./budget");
 
 // Monthly summary pushed to each user on the 1st (scripts/monthly-summary.sh
 // → POST /api/monthly-summary). One LINE message per user: a card per wallet
 // that has records in the month (a carousel when there are several) with
 // income / expense / balance, total expense vs the month before, and the 3
-// expense categories with the most spending, each vs the month before.
+// expense categories with the most spending, each vs the month before, and
+// each category budget's use (components/budget.js).
 // Users who typed "ปิดสรุปรายเดือน" (USERS.summary_off) are skipped;
 // USERS.summary_sent stops the same month from being sent twice.
 // Migration 005.
 
 const TH_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 const MAX_WALLETS = 5; // cards per message
+const MAX_BUDGETS = 6; // budget rows per card
 const CAT_EXPR = "NVL(category, CASE WHEN exvalue > 0 THEN 'other_income' ELSE 'other_expense' END)";
 const IN_MONTH = "fulldate >= TO_DATE(:month, 'YYYY-MM') AND fulldate < ADD_MONTHS(TO_DATE(:month, 'YYYY-MM'), 1)";
 const IN_PREV = "fulldate >= ADD_MONTHS(TO_DATE(:month, 'YYYY-MM'), -1) AND fulldate < TO_DATE(:month, 'YYYY-MM')";
@@ -84,6 +87,8 @@ async function walletSummaries(connection, uname, month) {
       GROUP BY wallet_id, ${CAT_EXPR}`,
     b
   )).rows);
+  const budgets = new Map();
+  for (const [walletId] of totals.rows) budgets.set(walletId, await getBudgets(connection, uname, walletId, month));
   return totals.rows.map(([walletId, name, income, expense, count]) => ({
     wallet_id: walletId,
     wallet_name: name,
@@ -97,6 +102,7 @@ async function walletSummaries(connection, uname, month) {
       .sort((x, y) => x[2] - y[2])
       .slice(0, 3)
       .map(([, cat, total]) => ({ ...describe(cat, -1), total, prev_total: prevCats.get(`${walletId}|${cat}`) || 0 })),
+    budgets: budgets.get(walletId) || [],
   }));
 }
 
@@ -137,6 +143,18 @@ function bubble(w, month) {
         small(cv ? `${prevName} ${fmtMoney(c.prev_total)} · ${cv}` : `${prevName} ไม่มี`),
       ] });
     }
+  }
+  if (w.budgets && w.budgets.length) {
+    contents.push({ type: "separator", margin: "md" });
+    contents.push({ type: "text", text: "งบรายเดือน", size: "xs", color: "#52514e", margin: "md" });
+    for (const b of w.budgets.slice(0, MAX_BUDGETS)) {
+      const over = b.spent > b.amount;
+      contents.push({ type: "box", layout: "vertical", contents: [
+        row(`${b.icon} ${b.label}`, `${fmtMoney(b.spent, false)} / ${fmtMoney(b.amount, false)}`, over ? "#d03b3b" : "#0b0b0b"),
+        small(over ? `เกินงบ ${fmtMoney(b.spent - b.amount, false)} (${b.pct}%)` : `ใช้ไป ${b.pct}% · เหลือ ${fmtMoney(b.amount - b.spent, false)}`),
+      ] });
+    }
+    if (w.budgets.length > MAX_BUDGETS) contents.push(small(`และอีก ${w.budgets.length - MAX_BUDGETS} หมวด ดูในเว็บ`));
   }
   return {
     type: "bubble",
