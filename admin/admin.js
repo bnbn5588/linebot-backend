@@ -23,6 +23,16 @@
     for (const [k, v] of Object.entries(attrs || {})) e.setAttribute(k, v);
     return e;
   };
+  const TH_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+  // Monthly summary counts (null before migration 005)
+  function summaryRows(sm) {
+    if (!sm) return [["สรุปรายเดือน", "–"]];
+    const label = `${TH_MONTHS[Number(sm.month.slice(5, 7)) - 1]} ${sm.month.slice(0, 4)}`;
+    return [
+      [`สรุปรายเดือน (${label})`, `ส่งแล้ว ${num.format(sm.sent)} คน`],
+      ["ปิดรับสรุป", `${num.format(sm.off)} จาก ${num.format(sm.users)} คน`],
+    ];
+  }
   function bytes(n) {
     if (n === null || n === undefined) return "–";
     const u = ["B", "KB", "MB", "GB", "TB"];
@@ -173,7 +183,7 @@
     // LINE
     const line = data.line;
     if (!line.configured) {
-      kv($("line"), [["สถานะ", "ยังไม่ได้ตั้ง LB_KEY ใน Vercel"]]);
+      kv($("line"), [["สถานะ", "ยังไม่ได้ตั้ง LB_KEY ใน Vercel"], ...summaryRows(data.summary)]);
     } else {
       if (line.bot) {
         $("botName").textContent = line.bot.name + " — Admin";
@@ -188,6 +198,7 @@
         ["บล็อก", f && f.status === "ready" ? num.format(f.blocks) : "–"],
       ];
       if (line.errors && line.errors.length) rows.push(["ข้อผิดพลาด", line.errors.join(", ")]);
+      rows.push(...summaryRows(data.summary));
       kv($("line"), rows);
     }
 

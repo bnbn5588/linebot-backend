@@ -137,8 +137,15 @@ function bubble(w, month) {
       ] });
     }
   }
-  contents.push({ type: "text", text: "พิมพ์ \"ปิดสรุปรายเดือน\" ถ้าไม่อยากรับสรุปนี้", size: "xxs", color: "#a3a29c", wrap: true, margin: "lg" });
-  return { type: "bubble", size: "kilo", body: { type: "box", layout: "vertical", spacing: "sm", paddingAll: "16px", contents } };
+  return {
+    type: "bubble",
+    size: "kilo",
+    body: { type: "box", layout: "vertical", spacing: "sm", paddingAll: "16px", contents },
+    footer: { type: "box", layout: "vertical", paddingAll: "8px", paddingTop: "0px", contents: [
+      { type: "button", style: "link", height: "sm", color: "#77766f",
+        action: { type: "message", label: "🔕 ปิดสรุปรายเดือน", text: "ปิดสรุปรายเดือน" } },
+    ] },
+  };
 }
 
 function message(wallets, month) {

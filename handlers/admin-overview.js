@@ -10,6 +10,7 @@ const { usageSummary } = require("../components/aiUsage");
 const { TH_TODAY, TH_TODAY_START_UTC } = require("../components/thaiTime");
 const { DAILY_CAP } = require("../components/aiFill");
 const { AI_MIN_CONFIDENCE } = require("../components/categories");
+const { lastMonth } = require("../components/monthlySummary");
 
 // GET /api/admin-overview — data for the admin website (a separate site/domain).
 // Auth: LINE ID token of an admin (components/adminAuth.js), CORS limited to
@@ -171,6 +172,23 @@ module.exports = async (req, res) => {
         { min: AI_MIN_CONFIDENCE }
       );
 
+      // Monthly summary (migration 005): counts only
+      let summary = null;
+      try {
+        const month = lastMonth();
+        const [[sent, off, total]] = await rows(
+          connection,
+          `SELECT count(CASE WHEN summary_sent >= :month THEN 1 END),
+                  count(summary_off),
+                  count(*)
+             FROM users`,
+          { month }
+        );
+        summary = { month, sent, off, users: total };
+      } catch (e) {
+        if (!/ORA-00904/.test(e.message)) throw e; // columns not there yet
+      }
+
       const userIds = users.map((u) => u[0]);
       const line = await lineInfo(userIds);
 
@@ -219,6 +237,7 @@ module.exports = async (req, res) => {
             memory_mb: Math.round(process.memoryUsage().rss / 1048576),
           },
           line: { ...line, names: undefined },
+          summary, // { month, sent, off, users } or null
           ai: {
             enabled: ai.enabled(),
             model: ai.model(),
