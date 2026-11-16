@@ -229,6 +229,21 @@
     btn.disabled = true;
     btn.textContent = "กำลังสร้างไฟล์…";
     try {
+      // Inside LINE (iPhone cannot save a file there): get a short-lived link
+      // and open it in the phone's browser, which downloads it.
+      if (window.liff && liff.isInClient && liff.isInClient()) {
+        try {
+          const link = await api("me-export", { method: "POST", body: { wallet_id: state.wallet.wallet_id, month: state.month } });
+          if (!link.rows) showToast("เดือนนี้ไม่มีรายการให้ส่งออก");
+          else {
+            liff.openWindow({ url: new URL(link.url, location.href).href, external: true });
+            showToast("กำลังเปิดไฟล์ในเบราว์เซอร์ของเครื่อง");
+          }
+        } catch (e) {
+          if (!(e instanceof AuthError)) showToast(e.status === 413 && e.message ? e.message : "ส่งออกไม่สำเร็จ ลองใหม่อีกครั้ง");
+        }
+        return;
+      }
       const r = await fetch("/api/me-export?" + q({ wallet_id: state.wallet.wallet_id, month: state.month }), {
         headers: { Authorization: "Bearer " + state.token },
       });
