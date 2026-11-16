@@ -50,11 +50,20 @@ const HELP = {
           ["create ชื่อ timezone", "สร้างกระเป๋าใหม่", "create travel Asia/Tokyo"],
         ],
         buttons: [{ label: "ดูกระเป๋า", text: "wallet" }] },
+      { title: "📅 สรุปรายเดือน",
+        lines: [
+          "ทุกวันที่ 1 ตอน 9 โมงเช้า (เวลาไทย) บอทจะส่งสรุปเดือนที่แล้วให้",
+          "มีรายรับ รายจ่าย คงเหลือ และ 3 หมวดที่ใช้มากสุด เทียบกับเดือนก่อน",
+        ],
+        note: "เปิดอยู่เป็นค่าเริ่มต้น กดปุ่มด้านล่างเพื่อปิดหรือเปิดได้ตลอด",
+        buttons: [
+          { label: "🔕 ปิดสรุปรายเดือน", text: "ปิดสรุปรายเดือน" },
+          { label: "🔔 เปิดสรุปรายเดือน", text: "เปิดสรุปรายเดือน" },
+        ] },
       { title: "✨ อื่นๆ",
         lines: [
           "🌐 หน้าเว็บ: กราฟ แยกตามหมวด ค้นหา แก้ไขรายการ",
           "📍 สุ่มร้านอาหาร: แชร์ตำแหน่ง หรือกดปุ่ม 📍 ด้านล่างแชท",
-          "📅 สรุปเดือนที่แล้ว: ส่งให้ทุกวันที่ 1 ตอน 9 โมงเช้า (เวลาไทย) พิมพ์ 'ปิดสรุปรายเดือน' เพื่อหยุดรับ หรือ 'เปิดสรุปรายเดือน' เพื่อรับอีกครั้ง",
           "พิมพ์ 'ช่วยเหลือ ข้อความ' เพื่อดูคำอธิบายแบบข้อความ",
         ],
         buttons: [
@@ -100,11 +109,20 @@ const HELP = {
           ["create name timezone", "Create a wallet", "create travel Asia/Tokyo"],
         ],
         buttons: [{ label: "My wallets", text: "wallet" }] },
+      { title: "📅 Monthly summary",
+        lines: [
+          "On the 1st at 9:00 (Thai time) the bot sends last month's summary",
+          "Income, expense, balance and the top 3 categories vs the month before",
+        ],
+        note: "On by default; turn it off or on any time with the buttons below",
+        buttons: [
+          { label: "🔕 Turn off", text: "summary off" },
+          { label: "🔔 Turn on", text: "summary on" },
+        ] },
       { title: "✨ More",
         lines: [
           "🌐 Web app: charts, categories, search, edit records",
           "📍 Random restaurant: share your location or tap 📍 below",
-          "📅 Monthly summary: last month's summary arrives on the 1st at 9:00 (Thai time). Type 'summary off' to stop it, 'summary on' to get it again",
           "Type 'help text' for the plain-text version",
         ],
         buttons: [
