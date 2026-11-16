@@ -60,6 +60,14 @@ const HELP = {
           { label: "🔕 ปิดสรุปรายเดือน", text: "ปิดสรุปรายเดือน" },
           { label: "🔔 เปิดสรุปรายเดือน", text: "เปิดสรุปรายเดือน" },
         ] },
+      { title: "💰 งบต่อหมวด",
+        lines: [
+          "ตั้งงบรายเดือนให้แต่ละหมวดได้ในหน้าเว็บ ที่การ์ด \"งบรายเดือน\"",
+          "บันทึกรายจ่ายแล้วใช้ถึง 80% บอทจะเตือน ⚠️ และเตือน 🚨 เมื่อเกินงบ",
+          "สรุปวันที่ 1 จะบอกด้วยว่าแต่ละหมวดใช้ไปเท่าไรจากงบ",
+        ],
+        note: "งบแยกตามกระเป๋า และใช้ทุกเดือนจนกว่าจะแก้หรือลบ",
+        buttons: [{ label: "💰 ตั้งงบในหน้าเว็บ", uri: WEB_APP_URL }] },
       { title: "✨ อื่นๆ",
         lines: [
           "🌐 หน้าเว็บ: กราฟ แยกตามหมวด ค้นหา แก้ไขรายการ",
@@ -119,6 +127,14 @@ const HELP = {
           { label: "🔕 Turn off", text: "summary off" },
           { label: "🔔 Turn on", text: "summary on" },
         ] },
+      { title: "💰 Budgets",
+        lines: [
+          "Set a monthly budget per category in the web app (\"งบรายเดือน\" card)",
+          "The bot warns ⚠️ when an expense takes it to 80%, and 🚨 when over",
+          "The summary on the 1st shows how much of each budget was used",
+        ],
+        note: "Budgets are per wallet and apply every month until changed",
+        buttons: [{ label: "💰 Set budgets", uri: WEB_APP_URL }] },
       { title: "✨ More",
         lines: [
           "🌐 Web app: charts, categories, search, edit records",
