@@ -77,10 +77,14 @@
 
         <section class="card span2" id="mapCard">
           <div class="card-head"><h2>ตารางหมวดกลาง (ใช้กับทุกคน)</h2><span class="muted" id="mapCount"></span></div>
-          <p class="muted help">ใช้เมื่อผู้ใช้ไม่ได้ตั้งหมวดของโน้ตนั้นเอง และมีผลก่อนการเดาจากคำในโน้ต โดยจับคู่กับโน้ตทั้งข้อความ (ไม่สนตัวพิมพ์เล็กใหญ่และช่องว่าง) มีผลกับรายการใหม่เท่านั้น รายการเก่าไม่เปลี่ยน · ที่มา: <b>admin</b> = เพิ่ม/แก้บนหน้านี้, <b>จากประวัติ</b> = โน้ตที่ใช้บ่อยในข้อมูลเดิม, <b>AI</b> = AI แนะนำ (แก้แล้วจะกลายเป็น admin) · <b>AI ไม่แน่ใจ</b> = AI ตอบเองแต่มั่นใจไม่ถึง 70% ยังไม่ถูกใช้ จนกว่าจะกดยืนยันหรือเลือกหมวดใหม่ · <b>ผู้ใช้แก้หมวด</b> = AI ตอบเองแล้วมีผู้ใช้เปลี่ยนเป็นหมวดอื่น หยุดใช้ไว้ก่อนจนกว่าจะยืนยันหรือเลือกหมวดใหม่</p>
+          <p class="muted help">ใช้เมื่อผู้ใช้ไม่ได้ตั้งหมวดของโน้ตนั้นเอง และมีผลก่อนการเดาจากคำในโน้ต โดยจับคู่กับโน้ตทั้งข้อความ (ไม่สนตัวพิมพ์เล็กใหญ่และช่องว่าง) หรือแบบ <b>ขึ้นต้นด้วย</b> = โน้ตที่ขึ้นต้นด้วยคำนี้ (เช่น "hi-life" ใช้กับ "hi-life ขนม" ด้วย · คำภาษาอังกฤษต้องจบเป็นคำ "tea" ไม่ใช้กับ "teapot" · ถ้ามีหลายแถวใช้แถวที่ยาวที่สุด · แถวที่ตรงทั้งข้อความชนะเสมอ) มีผลกับรายการใหม่เท่านั้น รายการเก่าไม่เปลี่ยน · ที่มา: <b>admin</b> = เพิ่ม/แก้บนหน้านี้, <b>จากประวัติ</b> = โน้ตที่ใช้บ่อยในข้อมูลเดิม, <b>AI</b> = AI แนะนำ (แก้แล้วจะกลายเป็น admin) · <b>AI ไม่แน่ใจ</b> = AI ตอบเองแต่มั่นใจไม่ถึง 70% ยังไม่ถูกใช้ จนกว่าจะกดยืนยันหรือเลือกหมวดใหม่ · <b>ผู้ใช้แก้หมวด</b> = AI ตอบเองแล้วมีผู้ใช้เปลี่ยนเป็นหมวดอื่น หยุดใช้ไว้ก่อนจนกว่าจะยืนยันหรือเลือกหมวดใหม่</p>
           <form class="map-form" id="mapForm" autocomplete="off">
             <input id="mapNote" type="text" maxlength="200" placeholder="โน้ต เช่น hi-life" aria-label="โน้ต" required>
             <select id="mapCat" aria-label="หมวด" required></select>
+            <select id="mapMatch" aria-label="วิธีจับคู่">
+              <option value="exact">ตรงทั้งข้อความ</option>
+              <option value="prefix">ขึ้นต้นด้วย</option>
+            </select>
             <button class="btn primary" type="submit" id="mapSave">บันทึก</button>
           </form>
           <div class="map-tools">
@@ -90,13 +94,14 @@
               <option value="admin">admin</option>
               <option value="history">จากประวัติ</option>
               <option value="ai">AI</option>
+              <option value="prefix">แบบขึ้นต้นด้วย</option>
               <option value="pending">รอยืนยัน (AI ไม่แน่ใจ / ผู้ใช้แก้หมวด)</option>
             </select>
           </div>
           <div class="map-msg" id="mapMsg" role="status"></div>
           <div class="scroll">
             <table class="t map">
-              <thead><tr><th>โน้ต</th><th>ประเภท</th><th>หมวด</th><th>ที่มา</th><th>รายการที่ตรง</th><th>อัปเดต</th><th></th></tr></thead>
+              <thead><tr><th>โน้ต</th><th>ประเภท</th><th>หมวด</th><th>จับคู่</th><th>ที่มา</th><th>รายการที่ตรง</th><th>อัปเดต</th><th></th></tr></thead>
               <tbody id="mapTable"></tbody>
             </table>
           </div>

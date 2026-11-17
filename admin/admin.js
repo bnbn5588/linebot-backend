@@ -409,7 +409,7 @@
   function renderMap() {
     const q = $("mapSearch").value.trim().toLowerCase();
     const src = $("mapSource").value;
-    const all = map.items.filter((it) => (!q || it.note_key.includes(q)) && (!src || (src === "pending" ? it.pending : it.source === src)));
+    const all = map.items.filter((it) => (!q || it.note_key.includes(q)) && (!src || (src === "pending" ? it.pending : src === "prefix" ? it.match === "prefix" : it.source === src)));
     $("mapCount").textContent = `${num.format(map.items.length)} รายการ`;
     const pages = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
     mapPageNo = Math.min(Math.max(mapPageNo, 1), pages);
@@ -422,7 +422,7 @@
     if (!items.length) {
       const tr = el("tr", "empty");
       const td = el("td", "", map.items.length ? "ไม่พบที่ตรงกับตัวกรอง" : "ยังไม่มีรายการ — เพิ่มด้านบน");
-      td.colSpan = 7;
+      td.colSpan = 8;
       tr.append(td);
       return $("mapTable").replaceChildren(tr);
     }
@@ -444,6 +444,24 @@
         }
       });
       const tdSel = el("td"); tdSel.append(sel);
+      const mode = el("select");
+      mode.setAttribute("aria-label", "วิธีจับคู่ของ " + it.note_key);
+      for (const [v, t] of [["exact", "ตรงทั้งข้อความ"], ["prefix", "ขึ้นต้นด้วย"]]) {
+        const o = el("option", "", t); o.value = v; if ((it.match || "exact") === v) o.selected = true; mode.append(o);
+      }
+      mode.addEventListener("change", async () => {
+        mode.disabled = true;
+        try {
+          await mapApi("PUT", null, { note: it.note_key, category: sel.value, match: mode.value });
+          mapMsg(`"${it.note_key}" → ${mode.value === "prefix" ? "ขึ้นต้นด้วย" : "ตรงทั้งข้อความ"}`);
+          await loadMap();
+        } catch (e) {
+          mapMsg("บันทึกไม่สำเร็จ: " + e.message, true);
+          mode.value = it.match || "exact";
+          mode.disabled = false;
+        }
+      });
+      const tdMode = el("td"); tdMode.append(mode);
       const tdSrc = el("td");
       const badge = el("span", "src " + it.source + (it.pending ? " pending" : ""), (it.disputed ? "ผู้ใช้แก้หมวด" : it.pending ? "AI ไม่แน่ใจ" : SOURCE_TH[it.source] || it.source) + (it.source === "ai" && it.confidence != null ? ` ${Math.round(it.confidence * 100)}%` : ""));
       if (it.model) badge.title = it.model + (it.auto ? " · ตอบเองตอนผู้ใช้บันทึก" : "");
@@ -481,7 +499,7 @@
         }
       });
       const tdDel = el("td"); tdDel.append(del);
-      tr.append(el("td", "", it.note_key), el("td", "", KIND_TH[it.kind]), tdSel, tdSrc, el("td", "", num.format(it.records)), el("td", "", it.updated_at), tdDel);
+      tr.append(el("td", "", it.note_key), el("td", "", KIND_TH[it.kind]), tdSel, tdMode, tdSrc, el("td", "", num.format(it.records)), el("td", "", it.updated_at), tdDel);
       return tr;
     }));
   }
@@ -492,8 +510,8 @@
     if (!note || !category) return;
     $("mapSave").disabled = true;
     try {
-      const d = await mapApi("PUT", null, { note, category });
-      mapMsg(`บันทึก "${d.note_key}" → ${catLabel(d.category)}`);
+      const d = await mapApi("PUT", null, { note, category, match: $("mapMatch").value });
+      mapMsg(`บันทึก "${d.note_key}"${d.match === "prefix" ? " (ขึ้นต้นด้วย)" : ""} → ${catLabel(d.category)}`);
       $("mapNote").value = "";
       await loadMap();
     } catch (e) {
@@ -531,7 +549,8 @@
       return s.category ? `ผู้ใช้คนนี้เคยตั้ง "${r.note_key}" เป็น ${catText(s.category)}` : "ผู้ใช้คนนี้ไม่เคยตั้งหมวดของโน้ตนี้";
     }
     if (s.step === "shared" && s.pending) return `AI แนะนำ ${catText(s.pending.category)} (${Math.round(s.pending.confidence * 100)}%) — ยังไม่ใช้ รอ admin ยืนยันในตารางกลาง`;
-    if (s.step === "shared") return s.category ? `"${r.note_key}" → ${catText(s.category)} (ที่มา: ${SOURCE_TH[s.source] || s.source})` : "ไม่มีโน้ตนี้ในตาราง (ต้องตรงทั้งข้อความ)";
+    if (s.step === "shared" && s.category && s.match === "prefix") return `ขึ้นต้นด้วย "${s.prefix}" → ${catText(s.category)} (ที่มา: ${SOURCE_TH[s.source] || s.source})`;
+    if (s.step === "shared") return s.category ? `"${r.note_key}" → ${catText(s.category)} (ที่มา: ${SOURCE_TH[s.source] || s.source})` : "ไม่มีโน้ตนี้ในตาราง และไม่ขึ้นต้นด้วยแถวแบบ \"ขึ้นต้นด้วย\"";
     if (s.step === "keyword") return s.category ? `เจอคำว่า "${s.word}"${s.field === "places" ? " (ชื่อร้าน/สถานที่)" : ""} → ${catText(s.category)}` : "ไม่เจอคำที่รู้จัก";
     return catText(s.category);
   }

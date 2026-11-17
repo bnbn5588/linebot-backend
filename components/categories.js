@@ -7,7 +7,7 @@
 //                  sets or changes a category)
 //   3. shared    — the same note is in the shared mapping for everyone
 //                  (table CATEGORY_MAP, edited on the admin site; source
-//                  'admin' or 'ai')
+//                  'admin' or 'ai'), or the note starts with a 'prefix' row
 //   4. keyword   — the note contains a known word, e.g. กาแฟ → drink
 //   5. fallback  — other_expense / other_income
 // A category must match the sign of the amount (expense < 0, income > 0);
@@ -197,18 +197,28 @@ async function fromMemory(connection, uname, note, amount) {
   return cat && isValidFor(cat, amount) ? cat : null;
 }
 
-// Shared mapping (same for every user), exact note match.
-// Returns { category, source, pending, confidence } or null. A pending row
-// (automatic AI answer with low confidence) must not be used.
+// Shared mapping (same for every user). An exact row (whole note) wins;
+// otherwise the longest 'prefix' row the note starts with (Latin prefixes only
+// at a word boundary: "tea" matches "tea time", not "teapot"; Thai has no
+// spaces, so a Thai prefix matches anywhere it starts the note).
+// Returns { category, source, pending, confidence, match, prefix } or null.
+// A pending row (automatic AI answer with low confidence) must not be used;
+// it is still returned (when nothing usable matched) so explain() can show it.
+const WORD_CHAR = /[a-z0-9]/;
+function prefixFits(key, prefix) {
+  if (!key.startsWith(prefix) || key.length === prefix.length) return false;
+  return !(WORD_CHAR.test(prefix[prefix.length - 1]) && WORD_CHAR.test(key[prefix.length]));
+}
 async function sharedRow(connection, note, amount) {
   const key = noteKey(note);
   if (!key) return null;
+  const kind = kindOf(amount);
   let r;
   try {
     r = await executeQuery(
       connection,
       "SELECT category, source, updated_by, confidence FROM category_map WHERE note_key = :note_key AND kind = :kind",
-      { note_key: key, kind: kindOf(amount) }
+      { note_key: key, kind }
     );
   } catch (e) {
     // Table not created yet (migration 002 not applied): skip this step
@@ -217,8 +227,31 @@ async function sharedRow(connection, note, amount) {
     throw e;
   }
   const row = r.rows[0];
-  if (!row || !isValidFor(row[0], amount)) return null;
-  return { category: row[0], source: row[1], pending: isPending(row[1], row[2], row[3]), confidence: row[3] };
+  const exact = row && isValidFor(row[0], amount)
+    ? { category: row[0], source: row[1], pending: isPending(row[1], row[2], row[3]), confidence: row[3], match: "exact", prefix: null }
+    : null;
+  if (exact && !exact.pending) return exact;
+
+  let p;
+  try {
+    p = await executeQuery(
+      connection,
+      `SELECT note_key, category, source, updated_by, confidence FROM category_map
+        WHERE kind = :kind AND match_mode = 'prefix'
+          AND LENGTH(note_key) < LENGTH(:note_key)
+          AND SUBSTR(:note_key, 1, LENGTH(note_key)) = note_key
+        ORDER BY LENGTH(note_key) DESC`,
+      { note_key: key, kind }
+    );
+  } catch (e) {
+    if (e && e.errorNum === 904) return exact; // migration 008 not applied yet
+    throw e;
+  }
+  for (const [prefix, category, source, updatedBy, confidence] of p.rows) {
+    if (!prefixFits(key, prefix) || !isValidFor(category, amount) || isPending(source, updatedBy, confidence)) continue;
+    return { category, source, pending: false, confidence, match: "prefix", prefix };
+  }
+  return exact;
 }
 const fromShared = async (connection, note, amount) => {
   const row = await sharedRow(connection, note, amount);
@@ -257,7 +290,7 @@ async function explain(connection, uname, rawNote, amount) {
   if (shared && shared.pending) {
     steps.push({ step: "shared", category: null, source: "ai", pending: { category: shared.category, confidence: shared.confidence } });
   } else {
-    steps.push({ step: "shared", category: shared ? shared.category : null, source: shared ? shared.source : null });
+    steps.push({ step: "shared", category: shared ? shared.category : null, source: shared ? shared.source : null, match: shared ? shared.match : null, prefix: shared ? shared.prefix : null });
   }
   const kw = keywordMatch(note, amount);
   steps.push({ step: "keyword", category: kw ? kw.key : null, word: kw ? kw.word : null, field: kw ? kw.field : null });
@@ -374,6 +407,7 @@ module.exports = {
   publicList,
   isValidFor,
   noteKey,
+  prefixFits,
   byKeyword,
   extractTag,
   fallbackFor,

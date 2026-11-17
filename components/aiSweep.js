@@ -40,6 +40,9 @@ async function candidates(connection, days, max) {
      ) e
       WHERE note_key IS NOT NULL
         AND NOT EXISTS (SELECT 1 FROM category_map m WHERE m.note_key = e.note_key AND m.kind = e.kind)
+        -- already covered by a "starts with" row (old records saved before it existed)
+        AND NOT EXISTS (SELECT 1 FROM category_map m WHERE m.kind = e.kind AND m.match_mode = 'prefix'
+                         AND SUBSTR(e.note_key, 1, LENGTH(m.note_key)) = m.note_key)
       GROUP BY note_key, kind
       ORDER BY max(fulldate) DESC
       FETCH FIRST :max ROWS ONLY`,
