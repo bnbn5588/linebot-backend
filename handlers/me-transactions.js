@@ -12,6 +12,7 @@ const CATEGORY_KEYS = new Set(CATEGORIES.map((c) => c.key));
 // /api/me-transactions — the signed-in user's records.
 //   GET    ?wallet_id=&month=YYYY-MM&q=text&limit=50&offset=0   list (newest first)
 //          &type=income|expense&category=<key>&note=<by-note key, exact>
+//          (no month + note or q: first page also has by_month [{ month, count, total }])
 //   PUT    body { id, exvalue, targetdate: "YYYY-MM-DD HH:MM:SS", detail, category? }   edit
 //   DELETE ?id=   delete
 // Every statement is scoped by uname from the verified LINE token, so a user
@@ -95,6 +96,22 @@ async function list(req, res, connection, uname) {
     binds
   );
   const rows = result.rows.slice(0, limit);
+  // All months with a note or search: totals per month (first page only),
+  // for the month headers and the "N รายการ ใน M เดือน" line.
+  let byMonth;
+  if (!month && offset === 0 && ((note !== undefined && note !== "") || (q && q.trim()))) {
+    const { offset: _o, fetch: _f, ...sumBinds } = binds;
+    const m = await executeQuery(
+      connection,
+      `SELECT TO_CHAR(fulldate, 'YYYY-MM'), count(*), sum(exvalue)
+         FROM expense
+        WHERE uname = :uname AND wallet_id = :wallet_id${filters}
+        GROUP BY TO_CHAR(fulldate, 'YYYY-MM')
+        ORDER BY 1 DESC`,
+      sumBinds
+    );
+    byMonth = m.rows.map(([ym, count, total]) => ({ month: ym, count, total }));
+  }
   return res.status(200).json({
     status: "success",
     data: {
@@ -103,6 +120,7 @@ async function list(req, res, connection, uname) {
       has_more: result.rows.length > limit,
       offset,
       limit,
+      ...(byMonth ? { by_month: byMonth } : {}),
     },
   });
 }

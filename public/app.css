@@ -216,3 +216,26 @@ select, input {
 
 .toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 10; max-width: calc(100% - 32px);
   background: var(--text-primary); color: var(--bg); padding: 10px 14px; border-radius: 10px; font-size: 14px; box-shadow: 0 4px 16px rgb(0 0 0 / 0.2); }
+
+/* note picker (all months) + all-months record list */
+.pick-note { margin: 0 0 8px; }
+.tx-sum { margin: 4px 0 4px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); font-size: 13px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.tx-sum b { color: var(--text-primary); }
+.tx li.mh { display: flex; justify-content: space-between; gap: 8px; padding: 12px 2px 4px; font-size: 12px; font-weight: 600; color: var(--text-muted); border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+.picker { max-height: min(85vh, 720px); display: none; flex-direction: column; overflow: hidden; }
+.picker[open] { display: flex; }
+.picker-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.picker-head h2 { margin: 0; }
+.picker .close { min-height: 40px; padding: 6px 12px; }
+.picker .seg3 { grid-template-columns: 1fr 1fr 1fr; margin-top: 10px; }
+.picker-list { list-style: none; margin: 6px 0 0; padding: 0; overflow-y: auto; flex: 1; min-height: 120px; overscroll-behavior: contain; }
+.picker-list li button {
+  all: unset; box-sizing: border-box; display: grid; width: 100%; cursor: pointer;
+  grid-template-columns: minmax(0, 1fr) auto; gap: 0 12px; padding: 10px 2px; border-bottom: 1px solid var(--border);
+}
+.picker-list li button:focus-visible { outline: 2px solid var(--focus); border-radius: 6px; }
+.picker-list li.on .n { font-weight: 700; }
+.picker-list .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.picker-list .v { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.picker-list .d { color: var(--text-muted); font-size: 12px; }
+.picker-list .d.r { text-align: right; }

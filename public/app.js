@@ -32,7 +32,9 @@
     type: "all",
     categories: [],
     category: null,
-    note: null, // { key, kind } picked in the by-note list
+    note: null, // { key, kind } picked in the by-note list or the note picker
+    txMonths: null, // by_month of an all-months list (note or search)
+    allNotes: null, // me-notes of the current wallet (picker), reloaded after edits
   };
 
   // ---------- helpers
@@ -644,7 +646,7 @@
       return b;
     };
     const catChip = () => state.category && chip(`${state.category.icon} ${state.category.label}`, "ล้างตัวกรองหมวด", () => setCategoryFilter(null));
-    const noteChip = () => state.note && chip(`📝 ${clipText(state.note.key, 24)}`, "ล้างตัวกรองโน้ต", () => setNoteFilter(null));
+    const noteChip = () => state.note && chip(`📝 ${clipText(state.note.key, 24)} · ทุกเดือน`, "ล้างตัวกรองโน้ต", () => setNoteFilter(null));
     for (const [row, chips] of [["chartChipRow", [catChip(), noteChip()]], ["catChipRow", [catChip(), noteChip()]], ["noteChipRow", [catChip()]]]) {
       const list = chips.filter(Boolean);
       $(row).replaceChildren(...list);
@@ -718,11 +720,12 @@
       state.offset = 0;
       state.tx = [];
     }
-    const searching = state.q.trim() !== "";
-    $("txMonth").textContent = searching ? "ทุกเดือน" : monthLabel(state.month);
+    // A picked note or a search lists every month
+    const allMonths = state.q.trim() !== "" || !!state.note;
+    $("txMonth").textContent = allMonths ? "ทุกเดือน" : monthLabel(state.month);
     const data = await api("me-transactions?" + q({
       wallet_id: state.wallet.wallet_id,
-      month: searching ? "" : state.month,
+      month: allMonths ? "" : state.month,
       q: state.q.trim(),
       type: state.type,
       category: state.category ? state.category.key : "",
@@ -731,19 +734,51 @@
       offset: state.offset,
     }));
     if (seq !== state.txSeq) return; // a newer search replaced this one
+    if (reset) state.txMonths = allMonths ? data.by_month || [] : null;
     state.tx = state.tx.concat(data.transactions);
     state.offset += data.transactions.length;
     state.hasMore = data.has_more;
     renderTx();
   }
 
+  // "86 รายการ ใน 14 เดือน · รวม −4,300 · เฉลี่ย −307/เดือน" for an all-months list
+  function renderTxSummary() {
+    const box = $("txSummary");
+    const months = state.txMonths;
+    if (!months || !months.length) {
+      box.hidden = true;
+      return;
+    }
+    const count = months.reduce((a, m) => a + m.count, 0);
+    const total = months.reduce((a, m) => a + Number(m.total), 0);
+    box.replaceChildren(
+      el("b", "", `${numFmt.format(count)} รายการ`), ` ใน ${months.length} เดือน · รวม `,
+      el("b", "", money(total, true)),
+      months.length > 1 ? ` · เฉลี่ย ${money(Math.round((total / months.length) * 100) / 100, true)}/เดือน (เฉพาะเดือนที่มี)` : ""
+    );
+    box.hidden = false;
+  }
+
   function renderTx() {
     const list = $("txList");
+    renderTxSummary();
     if (!state.tx.length) {
-      list.replaceChildren(el("li", "empty", state.q ? "ไม่พบรายการ" : TYPES[state.type].empty));
+      list.replaceChildren(el("li", "empty", state.q || state.note ? "ไม่พบรายการ" : TYPES[state.type].empty));
     } else {
-      list.replaceChildren(...state.tx.map((t) => {
+      const byMonth = state.txMonths ? new Map(state.txMonths.map((m) => [m.month, m])) : null;
+      let lastMonth = null;
+      list.replaceChildren(...state.tx.flatMap((t) => {
+        const out = [];
+        const ym = t.datetime.slice(0, 7);
+        if (byMonth && ym !== lastMonth) {
+          lastMonth = ym;
+          const m = byMonth.get(ym);
+          const h = el("li", "mh");
+          h.append(el("span", "", monthLabel(ym)), el("span", "", m ? `${money(m.total, true)} · ${m.count} รายการ` : ""));
+          out.push(h);
+        }
         const li = el("li");
+        out.push(li);
         const b = el("button");
         b.type = "button";
         b.append(
@@ -754,10 +789,83 @@
         );
         b.addEventListener("click", () => openEditor(t));
         li.append(b);
-        return li;
+        return out;
       }));
     }
     $("more").hidden = !state.hasMore;
+  }
+
+  // ---------- note picker (notes from every month)
+  const picker = $("notePicker");
+  const pickerType = () => (picker.querySelector("input[name=npType]:checked") || {}).value || "all";
+  async function openNotePicker() {
+    const t = picker.querySelector(`input[name=npType][value="${state.type}"]`);
+    if (t) t.checked = true;
+    $("npFilter").value = "";
+    if (picker.showModal) picker.showModal(); else picker.setAttribute("open", "");
+    if (!state.allNotes) {
+      $("npList").replaceChildren(el("li", "empty", "กำลังโหลด…"));
+      const wallet = state.wallet.wallet_id;
+      try {
+        const data = await api("me-notes?" + q({ wallet_id: wallet }));
+        if (wallet !== state.wallet.wallet_id) return;
+        state.allNotes = data.notes;
+      } catch (e) {
+        if (!(e instanceof AuthError)) $("npList").replaceChildren(el("li", "empty", "โหลดไม่สำเร็จ ลองใหม่อีกครั้ง"));
+        return;
+      }
+    }
+    renderNotePicker();
+  }
+  function closeNotePicker() {
+    if (picker.close) picker.close(); else picker.removeAttribute("open");
+  }
+  function renderNotePicker() {
+    if (!state.allNotes) return;
+    const type = pickerType();
+    const text = $("npFilter").value.trim().toLowerCase();
+    const shown = state.allNotes.filter((n) => {
+      const kind = n.total > 0 ? "income" : "expense";
+      return (type === "all" || kind === type) && (!text || n.note.includes(text));
+    });
+    const list = $("npList");
+    if (!shown.length) {
+      list.replaceChildren(el("li", "empty", text ? "ไม่พบโน้ตที่มีคำนี้" : "ยังไม่มีโน้ต"));
+      return;
+    }
+    // A few hundred rows at most per render; keep the DOM small
+    const LIMIT = 300;
+    const items = shown.slice(0, LIMIT).map((n) => {
+      const on = !!state.note && state.note.key === n.note;
+      const li = el("li", on ? "on" : "");
+      const b = el("button");
+      b.type = "button";
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+      b.append(
+        el("span", "n", n.note),
+        el("span", "v", money(n.total, true)),
+        el("span", "d", `${numFmt.format(n.count)} ครั้ง`),
+        el("span", "d r", `ล่าสุด ${whenLabel(n.last + " 00:00").split(" · ")[0]}`)
+      );
+      b.addEventListener("click", () => pickNote(n));
+      li.append(b);
+      return li;
+    });
+    if (shown.length > LIMIT) items.push(el("li", "empty", `และอีก ${shown.length - LIMIT} โน้ต — พิมพ์กรองเพื่อหา`));
+    list.replaceChildren(...items);
+  }
+  // The picker lists every note, whatever the category: picking one clears
+  // the category, and a type filter of the other kind.
+  function pickNote(n) {
+    const kind = n.total > 0 ? "income" : "expense";
+    closeNotePicker();
+    if (state.type !== "all" && state.type !== kind) {
+      setType("all");
+      store.set("type", "all");
+    }
+    state.category = null;
+    setNoteFilter({ key: n.note, kind });
+    $("txList").scrollIntoView({ block: "start", behavior: "smooth" });
   }
 
   // ---------- editor
@@ -828,6 +936,7 @@
     setBusy(true);
     try {
       await api("me-transactions", { method: "PUT", body });
+      state.allNotes = null;
       closeEditor();
       await loadAll();
       if ($("memoryCard").open) await loadMemory();
@@ -844,6 +953,7 @@
     setBusy(true);
     try {
       await api("me-transactions?" + q({ id: t.id }), { method: "DELETE" });
+      state.allNotes = null;
       closeEditor();
       await loadAll();
       if ($("memoryCard").open) await loadMemory();
@@ -916,6 +1026,7 @@
     state.wallet = state.wallets.find((w) => String(w.wallet_id) === e.target.value) || state.wallet;
     store.set("wallet_id", String(state.wallet.wallet_id));
     state.note = null; // notes belong to a wallet
+    state.allNotes = null;
     showFilterChips();
     run(loadAll);
   });
@@ -933,6 +1044,16 @@
   $("memoryCard").addEventListener("toggle", () => { if ($("memoryCard").open) run(loadMemory); });
   $("more").addEventListener("click", () => run(() => loadTx(false)));
   $("exportCsv").addEventListener("click", exportCsv);
+  $("pickNote").addEventListener("click", () => run(openNotePicker));
+  $("npClose").addEventListener("click", closeNotePicker);
+  $("npFilter").addEventListener("input", renderNotePicker);
+  for (const r of picker.querySelectorAll("input[name=npType]")) r.addEventListener("change", renderNotePicker);
+  // tap outside the sheet closes it
+  picker.addEventListener("click", (e) => {
+    if (e.target !== picker) return;
+    const r = picker.getBoundingClientRect();
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) closeNotePicker();
+  });
   $("editForm").addEventListener("submit", save);
   $("btnCancel").addEventListener("click", closeEditor);
   $("btnDelete").addEventListener("click", remove);

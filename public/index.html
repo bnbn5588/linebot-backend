@@ -102,10 +102,12 @@
       <section class="card">
         <div class="card-head"><h2>รายการ</h2><span class="muted" id="txMonth"></span></div>
         <div class="chip-row" id="catChipRow" hidden></div>
+        <button class="btn wide pick-note" id="pickNote" type="button" aria-haspopup="dialog">📝 เลือกโน้ต (ทุกเดือน)</button>
         <label class="search">
           <span class="sr-only">ค้นหาโน้ต</span>
           <input type="search" id="search" placeholder="ค้นหาโน้ต" autocomplete="off">
         </label>
+        <p class="tx-sum" id="txSummary" hidden></p>
         <ul class="tx" id="txList"></ul>
         <button class="btn ghost wide" id="more" hidden>โหลดเพิ่ม</button>
         <button class="btn ghost wide" id="exportCsv" type="button">ส่งออก CSV (ทั้งเดือน)</button>
@@ -147,6 +149,23 @@
         <button type="submit" class="btn primary" id="btnSave">บันทึก</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="notePicker" class="sheet picker" aria-labelledby="npTitle">
+    <div class="picker-head">
+      <h2 id="npTitle">เลือกโน้ต</h2>
+      <button type="button" class="btn ghost close" id="npClose" aria-label="ปิด">✕</button>
+    </div>
+    <div class="seg seg3" role="radiogroup" aria-label="ประเภทโน้ต">
+      <label><input type="radio" name="npType" value="all" checked> ทั้งหมด</label>
+      <label><input type="radio" name="npType" value="expense"> รายจ่าย</label>
+      <label><input type="radio" name="npType" value="income"> รายรับ</label>
+    </div>
+    <label class="search">
+      <span class="sr-only">กรองรายชื่อโน้ต</span>
+      <input type="search" id="npFilter" placeholder="กรองรายการนี้…" autocomplete="off">
+    </label>
+    <ul class="picker-list" id="npList"></ul>
   </dialog>
 
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
