@@ -5,9 +5,9 @@ const {
 } = require("../components/db");
 const { resolveWallet } = require("../components/services");
 const { lineAuth } = require("../components/lineAuth");
-const { parseAmount, isValidDateTime, typeCondition } = require("../components/utilities");
-const { categorize, remember, disputeAi, describe, isValidFor, forgetIfUnused, CATEGORIES } = require("../components/categories");
-const CATEGORY_KEYS = new Set(CATEGORIES.map((c) => c.key));
+const { parseAmount, isValidDateTime } = require("../components/utilities");
+const { buildTxFilter } = require("../components/txFilter");
+const { categorize, remember, disputeAi, describe, isValidFor, forgetIfUnused } = require("../components/categories");
 
 // /api/me-transactions — the signed-in user's records.
 //   GET    ?wallet_id=&month=YYYY-MM&q=text&limit=50&offset=0   list (newest first)
@@ -26,13 +26,8 @@ function badRequest(res, message) {
 
 async function list(req, res, connection, uname) {
   const { wallet_id, month, q, type, category, id, note } = req.query;
-  const typeSql = typeCondition(type);
-  if (typeSql === null) {
-    return badRequest(res, "Parameter 'type' must be 'income', 'expense' or 'all'.");
-  }
-  if (month && !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
-    return badRequest(res, "Parameter 'month' must be in 'YYYY-MM' format.");
-  }
+  const f = buildTxFilter({ month, type, category, note, q });
+  if (f.error) return badRequest(res, f.error);
   const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
   const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
 
@@ -41,49 +36,14 @@ async function list(req, res, connection, uname) {
     return res.status(404).json({ status: "error", message: "Wallet not found" });
   }
 
-  const binds = { uname, wallet_id: wallet.wallet_id, offset, fetch: limit + 1 };
-  let filters = typeSql;
-  if (month) {
-    filters +=
-      " AND fulldate >= TO_DATE(:month, 'YYYY-MM') AND fulldate < ADD_MONTHS(TO_DATE(:month, 'YYYY-MM'), 1)";
-    binds.month = month;
-  }
+  const binds = { uname, wallet_id: wallet.wallet_id, offset, fetch: limit + 1, ...f.binds };
+  let filters = f.sql;
   if (id !== undefined && id !== "") {
     if (!/^\d{1,15}$/.test(id)) {
       return badRequest(res, "Parameter 'id' must be a number.");
     }
     filters += " AND trans_id = :id";
     binds.id = Number(id);
-  }
-  if (category) {
-    if (!CATEGORY_KEYS.has(category)) {
-      return badRequest(res, "Unknown 'category'.");
-    }
-    // Old records have no category yet; they count as "other"
-    // (by sign, as in me-summary: > 0 income, otherwise expense)
-    filters += category === "other_expense"
-      ? " AND (category = :category OR (category IS NULL AND exvalue <= 0))"
-      : category === "other_income"
-        ? " AND (category = :category OR (category IS NULL AND exvalue > 0))"
-        : " AND category = :category";
-    binds.category = category;
-  }
-  if (note !== undefined && note !== "") {
-    // exact note, the same key as me-summary's by-note list (lower-case, trimmed)
-    if (typeof note !== "string" || note.length > 500) {
-      return badRequest(res, "Parameter 'note' is too long.");
-    }
-    filters += " AND lower(trim(note)) = :note_key";
-    binds.note_key = note.trim().toLowerCase();
-  }
-  if (q && q.length > 100) {
-    return badRequest(res, "Parameter 'q' is too long.");
-  }
-  if (q && q.trim()) {
-    // Escape LIKE wildcards so the search is a plain "contains"
-    const term = q.trim().toLowerCase().replace(/[\\%_]/g, (c) => "\\" + c);
-    filters += " AND lower(note) LIKE :q ESCAPE '\\'";
-    binds.q = `%${term}%`;
   }
 
   const result = await executeQuery(

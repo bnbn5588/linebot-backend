@@ -25,13 +25,17 @@ const CATEGORY_KEYS = new Set(CATEGORIES.map((c) => c.key));
 // the 3-month average). With `category`, category_months has the
 // per-month rows for that category only. With `note` (a by-note key), the
 // same filter_months narrowed to that note; by_note entries also carry
-// prev_total / avg_total.
+// prev_total / avg_total. With `range=12` (and month), range12 has the
+// category totals of the 12 months ending with `month` and their average.
 module.exports = async (req, res) => {
   if (req.method !== "GET") {
     return res.status(405).json({ status: "error", message: "Use GET." });
   }
   return lineAuth(req, res, async (uname) => {
-    const { wallet_id, month, type, category, note } = req.query;
+    const { wallet_id, month, type, category, note, range } = req.query;
+    if (range !== undefined && range !== "" && range !== "12") {
+      return res.status(400).json({ status: "error", message: "Parameter 'range' must be '12'." });
+    }
     if (note !== undefined && (typeof note !== "string" || note.length > 500)) {
       return res.status(400).json({ status: "error", message: "Parameter 'note' is too long." });
     }
@@ -172,6 +176,39 @@ module.exports = async (req, res) => {
         noteCmp = await sums("lower(trim(note))", typeSql + categoryFilter, category ? { category } : {});
         compare = { prev_days: days, avg_months: avgMonths };
       }
+      // range=12: per category over the 12 months ending with `month`. The
+      // average divides by every month of that window (months with nothing
+      // count as 0), starting at the wallet's first record when it is newer.
+      let range12 = null;
+      if (range === "12" && month) {
+        const first = totals.rows[0][4] ? totals.rows[0][4].slice(0, 7) : null;
+        const [y, m] = month.split("-").map(Number);
+        const from = new Date(Date.UTC(y, m - 12, 1)).toISOString().slice(0, 7);
+        const start = first && first > from ? first : from;
+        const span = start > month ? 0 : (y - Number(start.slice(0, 4))) * 12 + (m - Number(start.slice(5, 7))) + 1;
+        const r12 = await executeQuery(
+          connection,
+          `SELECT ${catExpr} AS cat, sum(exvalue), count(*)
+             FROM expense
+            WHERE uname = :uname AND wallet_id = :wallet_id
+              AND fulldate >= ADD_MONTHS(TO_DATE(:month, 'YYYY-MM'), -11)
+              AND fulldate < ADD_MONTHS(TO_DATE(:month, 'YYYY-MM'), 1)${typeSql}
+            GROUP BY ${catExpr}
+            ORDER BY 2`,
+          { ...binds, month }
+        );
+        range12 = {
+          from: start,
+          to: month,
+          months: span,
+          by_category: r12.rows.map((r) => ({
+            ...describe(r[0], r[1]),
+            total: r[1],
+            count: r[2],
+            avg_total: span ? Math.round((r[1] / span) * 100) / 100 : 0,
+          })),
+        };
+      }
       const cmpFields = (c, key) => ({
         prev_total: compare ? c.prev.get(key) || 0 : null,
         avg_total: compare && compare.avg_months ? c.avg.get(key) || 0 : null,
@@ -232,6 +269,8 @@ module.exports = async (req, res) => {
           // prev_days: month is not over yet, prev_total covers days 1..prev_days
           // of the month before; avg_months: months averaged for avg_total
           compare,
+          // range=12 only: { from, to, months, by_category [{ ...category, total, count, avg_total }] }
+          range12,
           note: note ? noteKey : null,
           // per-month rows for the picked category and/or note (same shape as months)
           filter_months: filterMonths ? monthRows(filterMonths) : null,

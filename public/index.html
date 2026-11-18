@@ -63,6 +63,7 @@
         <div class="chart-sel num" id="chartSel"></div>
         <div class="chart" id="chart"></div>
         <div class="tooltip" id="tooltip" role="status" hidden></div>
+        <p class="chart-stats" id="chartStats" hidden></p>
         <details class="table-view">
           <summary>ดูเป็นตาราง</summary>
           <table>
@@ -74,7 +75,12 @@
 
       <section class="card">
         <div class="card-head"><h2>แยกตามหมวด</h2><span class="muted" id="catMonth"></span></div>
+        <div class="filter filter2" role="radiogroup" aria-label="ช่วงของหมวด">
+          <label><input type="radio" name="catRange" value="month" checked> เดือนนี้</label>
+          <label><input type="radio" name="catRange" value="12"> 12 เดือนล่าสุด</label>
+        </div>
         <ul class="notes cats" id="cats"></ul>
+        <p class="muted cat-range" id="catRangeNote" hidden></p>
       </section>
 
       <section class="card" id="budgetCard">
@@ -110,7 +116,7 @@
         <p class="tx-sum" id="txSummary" hidden></p>
         <ul class="tx" id="txList"></ul>
         <button class="btn ghost wide" id="more" hidden>โหลดเพิ่ม</button>
-        <button class="btn ghost wide" id="exportCsv" type="button">ส่งออก CSV (ทั้งเดือน)</button>
+        <button class="btn ghost wide" id="exportCsv" type="button">ส่งออก CSV</button>
       </section>
 
       <details class="card memory" id="memoryCard">

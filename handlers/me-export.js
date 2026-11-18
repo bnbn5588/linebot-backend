@@ -2,23 +2,25 @@ const { executeQuery, getConnection, closeConnection } = require("../components/
 const { resolveWallet } = require("../components/services");
 const { lineAuth } = require("../components/lineAuth");
 const { describe } = require("../components/categories");
+const { buildTxFilter, MONTH_RE } = require("../components/txFilter");
 const crypto = require("crypto");
 
-// /api/me-export — the signed-in user's records for one wallet and month as
-// CSV (UTF-8 with BOM so Excel reads Thai). Times are the stored wallet time
-// (fulldate), the same as the web page shows.
-//   GET  ?wallet_id=&month=YYYY-MM   (LINE token)  -> the CSV
-//   POST { wallet_id, month }        (LINE token)  -> { url } a short-lived link
-//   GET  ?link=<signed>              (no token)    -> the CSV
+// /api/me-export — the signed-in user's records for one wallet as CSV
+// (UTF-8 with BOM so Excel reads Thai): the same records the web list shows.
+// Times are the stored wallet time (fulldate), the same as the web page shows.
+// Filters (same as me-transactions): month=YYYY-MM, type, category, note, q.
+// month is required unless note or q is given (then: all months).
+//   GET  ?wallet_id=&month=&type=&category=&note=&q=   (LINE token) -> the CSV
+//   POST { wallet_id, month, type, category, note, q } (LINE token) -> { url } a short-lived link
+//   GET  ?link=<signed>                                (no token)   -> the CSV
 // The link exists because the LINE in-app browser on iPhone cannot save a
 // file: the page opens the link in Safari instead (liff.openWindow external).
-// It is stateless: AES-256-GCM over {uname, wallet, month, expiry}, valid
+// It is stateless: AES-256-GCM over {uname, wallet, filters, expiry}, valid
 // LINK_TTL_S. Encrypted, not just signed, so the LINE userId never appears in
 // the URL (Vercel request logs, browser history).
 
 const MAX_ROWS = 5000;
 const LINK_TTL_S = 120;
-const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 function linkKey() {
   const secret = process.env.API_KEY;
@@ -35,7 +37,7 @@ function signLink(payload) {
 
 // -> payload, "expired" or null
 function readLink(link) {
-  if (typeof link !== "string" || !/^[A-Za-z0-9_-]{40,800}$/.test(link)) return null;
+  if (typeof link !== "string" || !/^[A-Za-z0-9_-]{40,2000}$/.test(link)) return null;
   const raw = Buffer.from(link, "base64url");
   let p;
   try {
@@ -46,7 +48,8 @@ function readLink(link) {
     if (error.message === "API_KEY is not set") throw error;
     return null; // wrong key / tampered / not JSON
   }
-  if (!p || typeof p.u !== "string" || !MONTH_RE.test(p.m) || typeof p.e !== "number") return null;
+  if (!p || typeof p.u !== "string" || typeof p.e !== "number") return null;
+  if (p.m !== null && !MONTH_RE.test(p.m)) return null;
   return p.e < Date.now() / 1000 ? "expired" : p;
 }
 
@@ -69,7 +72,31 @@ function amount(n) {
   return String(Math.round(Number(n) * 100) / 100);
 }
 
-async function sendCsv(res, uname, wallet_id, month, fromLink = false) {
+// { month, type, category, note, q } from a query/body -> { filters, f } or { error }
+function readFilters(src) {
+  const pick = (k) => (typeof src[k] === "string" && src[k] !== "" ? src[k] : undefined);
+  const filters = { month: pick("month"), type: pick("type"), category: pick("category"), note: pick("note"), q: pick("q") };
+  if (filters.note !== undefined && !filters.note.trim()) filters.note = undefined;
+  if (filters.q !== undefined && !filters.q.trim()) filters.q = undefined;
+  if (!filters.month && !filters.note && !filters.q) {
+    return { error: "Parameter 'month' must be in 'YYYY-MM' format." };
+  }
+  const f = buildTxFilter(filters);
+  return f.error ? { error: f.error } : { filters, f };
+}
+
+// ASCII only (Content-Disposition): expenses-0-2026-11-food-expense.csv,
+// expenses-0-all-note.csv, expenses-0-all-search.csv
+function fileName(walletId, { month, type, category, note, q }) {
+  const parts = ["expenses", walletId, month || "all"];
+  if (category) parts.push(category);
+  if (note) parts.push("note");
+  else if (q) parts.push("search");
+  if (type && type !== "all") parts.push(type);
+  return parts.join("-") + ".csv";
+}
+
+async function sendCsv(res, uname, wallet_id, filters, fromLink = false) {
   const fail = (status, message, thai) =>
     fromLink ? textError(res, status, thai || message) : res.status(status).json({ status: "error", message });
   let connection;
@@ -79,18 +106,19 @@ async function sendCsv(res, uname, wallet_id, month, fromLink = false) {
     if (!wallet) {
       return fail(404, "Wallet not found", "ไม่พบกระเป๋านี้");
     }
+    const f = buildTxFilter(filters);
+    if (f.error) return fail(400, f.error, "ลิงก์ไม่ถูกต้อง");
     const result = await executeQuery(
       connection,
       `SELECT TO_CHAR(fulldate, 'YYYY-MM-DD HH24:MI:SS'), exvalue, category, note
          FROM expense
-        WHERE uname = :uname AND wallet_id = :wallet_id
-          AND fulldate >= TO_DATE(:month, 'YYYY-MM') AND fulldate < ADD_MONTHS(TO_DATE(:month, 'YYYY-MM'), 1)
+        WHERE uname = :uname AND wallet_id = :wallet_id${f.sql}
         ORDER BY fulldate ASC, trans_id ASC
         FETCH FIRST :fetch ROWS ONLY`,
-      { uname, wallet_id: wallet.wallet_id, month, fetch: MAX_ROWS + 1 }
+      { uname, wallet_id: wallet.wallet_id, ...f.binds, fetch: MAX_ROWS + 1 }
     );
     if (result.rows.length > MAX_ROWS) {
-      return fail(413, `เดือนนี้มีรายการเกิน ${MAX_ROWS} รายการ`);
+      return fail(413, `มีรายการเกิน ${MAX_ROWS} รายการ เลือกช่วงให้แคบลง`);
     }
     const lines = [["วันที่-เวลา", "ประเภท", "หมวด", "จำนวนเงิน", "โน้ต"].join(",")];
     for (const [datetime, exvalue, category, note] of result.rows) {
@@ -102,7 +130,7 @@ async function sendCsv(res, uname, wallet_id, month, fromLink = false) {
         note,
       ].map((v, i) => cell(v, i !== 3)).join(","));
     }
-    const filename = `expenses-${wallet.wallet_id}-${month}.csv`;
+    const filename = fileName(wallet.wallet_id, filters);
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.setHeader("Cache-Control", "no-store");
@@ -117,10 +145,13 @@ async function sendCsv(res, uname, wallet_id, month, fromLink = false) {
 }
 
 async function createLink(req, res, uname) {
-  const { wallet_id, month } = req.body || {};
-  if (typeof month !== "string" || !MONTH_RE.test(month)) {
-    return res.status(400).json({ status: "error", message: "Field 'month' must be in 'YYYY-MM' format." });
+  const body = req.body || {};
+  const { wallet_id } = body;
+  const r = readFilters(body);
+  if (r.error) {
+    return res.status(400).json({ status: "error", message: r.error });
   }
+  const { filters, f } = r;
   if (wallet_id !== undefined && wallet_id !== null && !/^\d{1,15}$/.test(String(wallet_id))) {
     return res.status(400).json({ status: "error", message: "Field 'wallet_id' must be a number." });
   }
@@ -135,15 +166,18 @@ async function createLink(req, res, uname) {
     const count = await executeQuery(
       connection,
       `SELECT COUNT(*) FROM expense
-        WHERE uname = :uname AND wallet_id = :wallet_id
-          AND fulldate >= TO_DATE(:month, 'YYYY-MM') AND fulldate < ADD_MONTHS(TO_DATE(:month, 'YYYY-MM'), 1)`,
-      { uname, wallet_id: wallet.wallet_id, month }
+        WHERE uname = :uname AND wallet_id = :wallet_id${f.sql}`,
+      { uname, wallet_id: wallet.wallet_id, ...f.binds }
     );
     const rows = Number(count.rows[0][0]);
     if (rows > MAX_ROWS) {
-      return res.status(413).json({ status: "error", message: `เดือนนี้มีรายการเกิน ${MAX_ROWS} รายการ` });
+      return res.status(413).json({ status: "error", message: `มีรายการเกิน ${MAX_ROWS} รายการ เลือกช่วงให้แคบลง` });
     }
-    const link = signLink({ u: uname, w: wallet.wallet_id, m: month, e: Math.floor(Date.now() / 1000) + LINK_TTL_S });
+    const link = signLink({
+      u: uname, w: wallet.wallet_id, m: filters.month || null,
+      t: filters.type || null, c: filters.category || null, n: filters.note || null, s: filters.q || null,
+      e: Math.floor(Date.now() / 1000) + LINK_TTL_S,
+    });
     res.setHeader("Cache-Control", "no-store");
     return res.status(200).json({ status: "success", data: { url: `/api/me-export?link=${link}`, rows, expires_in: LINK_TTL_S } });
   } catch (error) {
@@ -171,13 +205,15 @@ module.exports = async (req, res) => {
     }
     if (p === "expired") return textError(res, 410, "ลิงก์หมดอายุแล้ว กลับไปที่แอป LINE แล้วกด \"ส่งออก CSV\" ใหม่");
     if (!p) return textError(res, 403, "ลิงก์ไม่ถูกต้อง");
-    return sendCsv(res, p.u, String(p.w), p.m, true);
+    const filters = { month: p.m || undefined, type: p.t || undefined, category: p.c || undefined, note: p.n || undefined, q: p.s || undefined };
+    if (!filters.month && !filters.note && !filters.q) return textError(res, 403, "ลิงก์ไม่ถูกต้อง");
+    return sendCsv(res, p.u, String(p.w), filters, true);
   }
   return lineAuth(req, res, (uname) => {
-    const { wallet_id, month } = req.query;
-    if (!month || !MONTH_RE.test(month)) {
-      return res.status(400).json({ status: "error", message: "Parameter 'month' must be in 'YYYY-MM' format." });
+    const r = readFilters(req.query);
+    if (r.error) {
+      return res.status(400).json({ status: "error", message: r.error });
     }
-    return sendCsv(res, uname, wallet_id, month);
+    return sendCsv(res, uname, req.query.wallet_id, r.filters);
   });
 };

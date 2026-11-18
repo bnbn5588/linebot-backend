@@ -35,6 +35,7 @@
     note: null, // { key, kind } picked in the by-note list or the note picker
     txMonths: null, // by_month of an all-months list (note or search)
     allNotes: null, // me-notes of the current wallet (picker), reloaded after edits
+    catRange: "month", // category card: "month" | "12" (last 12 months)
   };
 
   // ---------- helpers
@@ -202,6 +203,10 @@
 
     const savedType = store.get("type");
     if (savedType && TYPES[savedType]) setType(savedType);
+    if (store.get("catRange") === "12") {
+      state.catRange = "12";
+      document.querySelector("input[name=catRange][value='12']").checked = true;
+    }
 
     $("status").hidden = true;
     $("view").hidden = false;
@@ -225,6 +230,30 @@
 
   // CSV of the selected wallet + month (all records; list filters do not apply).
   // fetch with the token, then save via a temporary <a download>.
+  // The CSV is the record list as shown: same month / type / category / note / search
+  function listAllMonths() {
+    return state.q.trim() !== "" || !!state.note;
+  }
+  function exportFilters() {
+    return {
+      wallet_id: state.wallet.wallet_id,
+      month: listAllMonths() ? "" : state.month,
+      type: state.type === "all" ? "" : state.type,
+      category: state.category ? state.category.key : "",
+      note: state.note ? state.note.key : "",
+      q: state.q.trim(),
+    };
+  }
+  function exportLabel() {
+    const parts = [];
+    if (state.category) parts.push(`${state.category.icon} ${state.category.label}`);
+    if (state.note) parts.push(`📝 ${clipText(state.note.key, 16)}`);
+    else if (state.q.trim()) parts.push(`"${clipText(state.q.trim(), 12)}"`);
+    if (state.type !== "all") parts.push(TYPES[state.type].label);
+    parts.push(listAllMonths() ? "ทุกเดือน" : monthLabel(state.month));
+    return `ส่งออก CSV (${parts.join(" · ")})`;
+  }
+
   async function exportCsv() {
     const btn = $("exportCsv");
     const label = btn.textContent;
@@ -235,8 +264,8 @@
       // and open it in the phone's browser, which downloads it.
       if (window.liff && liff.isInClient && liff.isInClient()) {
         try {
-          const link = await api("me-export", { method: "POST", body: { wallet_id: state.wallet.wallet_id, month: state.month } });
-          if (!link.rows) showToast("เดือนนี้ไม่มีรายการให้ส่งออก");
+          const link = await api("me-export", { method: "POST", body: exportFilters() });
+          if (!link.rows) showToast(listAllMonths() ? "ไม่มีรายการให้ส่งออก" : "เดือนนี้ไม่มีรายการให้ส่งออก");
           else {
             liff.openWindow({ url: new URL(link.url, location.href).href, external: true });
             showToast("กำลังเปิดไฟล์ในเบราว์เซอร์ของเครื่อง");
@@ -246,7 +275,7 @@
         }
         return;
       }
-      const r = await fetch("/api/me-export?" + q({ wallet_id: state.wallet.wallet_id, month: state.month }), {
+      const r = await fetch("/api/me-export?" + q(exportFilters()), {
         headers: { Authorization: "Bearer " + state.token },
       });
       if (r.status === 401) {
@@ -260,14 +289,15 @@
         return;
       }
       if (r.headers.get("X-Row-Count") === "0") {
-        showToast("เดือนนี้ไม่มีรายการให้ส่งออก");
+        showToast(listAllMonths() ? "ไม่มีรายการให้ส่งออก" : "เดือนนี้ไม่มีรายการให้ส่งออก");
         return;
       }
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `expenses-${state.wallet.wallet_id}-${state.month}.csv`;
+      const cd = /filename="([^"]+)"/.exec(r.headers.get("Content-Disposition") || "");
+      a.download = cd ? cd[1] : `expenses-${state.wallet.wallet_id}-${state.month}.csv`;
       document.body.append(a);
       a.click();
       a.remove();
@@ -369,10 +399,11 @@
 
   // ---------- summary
   async function loadSummary() {
-    const data = await api("me-summary?" + q({ wallet_id: state.wallet.wallet_id, month: state.month, type: state.type, category: state.category ? state.category.key : "", note: state.note ? state.note.key : "" }));
+    const data = await api("me-summary?" + q({ wallet_id: state.wallet.wallet_id, month: state.month, type: state.type, category: state.category ? state.category.key : "", note: state.note ? state.note.key : "", range: state.catRange === "12" ? "12" : "" }));
     state.summary = data;
     renderTiles();
     renderChart();
+    renderChartStats();
     renderMonthTable();
     renderNotes();
     renderCategories();
@@ -414,6 +445,40 @@
     const out = [];
     for (let i = 11; i >= 0; i--) out.push(seriesRow(addMonths(end, -i)));
     return out;
+  }
+
+  // Under the chart, with a category or note picked: total / monthly average
+  // over the chart's 12 months, and the highest / lowest month. Months before
+  // the wallet's first record are left out; months with nothing count as 0.
+  function renderChartStats() {
+    const box = $("chartStats");
+    if (!state.category && !state.note) {
+      box.hidden = true;
+      return;
+    }
+    const first = state.summary.months.length ? state.summary.months[0].month : null;
+    const T = TYPES[chartType()];
+    const now = currentMonth(state.wallet.timezone);
+    const rows = chartWindow().filter((r) => first && r.month >= first && r.month <= [now, state.month].sort().pop());
+    if (!rows.length) {
+      box.hidden = true;
+      return;
+    }
+    const vals = rows.map((r) => Number(r[T.field]) || 0);
+    const total = vals.reduce((a, v) => a + v, 0);
+    const size = (v) => Math.abs(v);
+    let hi = 0, lo = 0;
+    vals.forEach((v, i) => {
+      if (size(v) > size(vals[hi])) hi = i;
+      if (size(v) < size(vals[lo])) lo = i;
+    });
+    const span = rows.length === 1 ? monthLabel(rows[0].month) : `${rows.length} เดือน (${monthLabel(rows[0].month)} – ${monthLabel(rows[rows.length - 1].month)})`;
+    const line1 = [`${span}: รวม `, el("b", "", money(total, true)), " · เฉลี่ย ", el("b", "", `${money(Math.round(total / rows.length), true)}/เดือน`)];
+    box.replaceChildren(...line1);
+    if (rows.length > 1) {
+      box.append(el("br"), `สูงสุด ${monthLabel(rows[hi].month)} ${money(vals[hi], true)} · ต่ำสุด ${monthLabel(rows[lo].month)} ${money(vals[lo], true)}`);
+    }
+    box.hidden = false;
   }
 
   function renderChart() {
@@ -560,10 +625,18 @@
   // ---------- categories
   function renderCategories() {
     const list = $("cats");
-    $("catMonth").textContent = monthLabel(state.month);
-    const cats = state.summary.by_category || [];
+    const r12 = state.catRange === "12" ? state.summary.range12 : null;
+    $("catMonth").textContent = r12 ? (r12.from === r12.to ? monthLabel(r12.to) : `${monthLabel(r12.from)} – ${monthLabel(r12.to)}`) : monthLabel(state.month);
+    const note = $("catRangeNote");
+    note.hidden = !r12;
+    if (r12) {
+      note.textContent = r12.months < 12
+        ? `รวม ${r12.months} เดือน (กระเป๋านี้เริ่มมีรายการ ${monthLabel(r12.from)}) · เฉลี่ยหารด้วยทุกเดือน รวมเดือนที่ไม่มีรายการ`
+        : "รวม 12 เดือน · เฉลี่ยหารด้วย 12 รวมเดือนที่ไม่มีรายการ";
+    }
+    const cats = r12 ? r12.by_category : state.summary.by_category || [];
     if (!cats.length) {
-      list.replaceChildren(el("li", "empty", TYPES[state.type].empty));
+      list.replaceChildren(el("li", "empty", r12 ? "ไม่มีรายการใน 12 เดือนนี้" : TYPES[state.type].empty));
       return;
     }
     const max = Math.max(...cats.map((c) => Math.abs(c.total))) || 1;
@@ -579,7 +652,12 @@
       fill.style.width = Math.max((Math.abs(c.total) / max) * 100, 1.5) + "%";
       track.append(fill);
       b.append(el("span", "n", `${c.icon} ${c.label}`), v, track);
-      for (const line of compareLines(c)) b.append(el("span", "d", line));
+      if (r12) {
+        v.firstChild.textContent = "รวม " + money(c.total, true);
+        b.append(el("span", "d", `เฉลี่ย ${money(Math.round(c.avg_total), true)}/เดือน`));
+      } else {
+        for (const line of compareLines(c)) b.append(el("span", "d", line));
+      }
       b.addEventListener("click", () => setCategoryFilter(state.category && state.category.key === c.key ? null : c));
       li.append(b);
       return li;
@@ -721,8 +799,9 @@
       state.tx = [];
     }
     // A picked note or a search lists every month
-    const allMonths = state.q.trim() !== "" || !!state.note;
+    const allMonths = listAllMonths();
     $("txMonth").textContent = allMonths ? "ทุกเดือน" : monthLabel(state.month);
+    if (!$("exportCsv").disabled) $("exportCsv").textContent = exportLabel();
     const data = await api("me-transactions?" + q({
       wallet_id: state.wallet.wallet_id,
       month: allMonths ? "" : state.month,
@@ -754,7 +833,7 @@
     box.replaceChildren(
       el("b", "", `${numFmt.format(count)} รายการ`), ` ใน ${months.length} เดือน · รวม `,
       el("b", "", money(total, true)),
-      months.length > 1 ? ` · เฉลี่ย ${money(Math.round((total / months.length) * 100) / 100, true)}/เดือน (เฉพาะเดือนที่มี)` : ""
+      months.length > 1 ? ` · เฉลี่ย ${money(Math.round(total / months.length), true)}/เดือน (เฉพาะเดือนที่มี)` : ""
     );
     box.hidden = false;
   }
@@ -1045,6 +1124,14 @@
   $("more").addEventListener("click", () => run(() => loadTx(false)));
   $("exportCsv").addEventListener("click", exportCsv);
   $("pickNote").addEventListener("click", () => run(openNotePicker));
+  for (const r of document.querySelectorAll("input[name=catRange]")) {
+    r.addEventListener("change", (e) => {
+      if (!e.target.checked) return;
+      state.catRange = e.target.value === "12" ? "12" : "month";
+      store.set("catRange", state.catRange);
+      run(loadSummary);
+    });
+  }
   $("npClose").addEventListener("click", closeNotePicker);
   $("npFilter").addEventListener("input", renderNotePicker);
   for (const r of picker.querySelectorAll("input[name=npType]")) r.addEventListener("change", renderNotePicker);
