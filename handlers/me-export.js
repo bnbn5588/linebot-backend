@@ -2,7 +2,7 @@ const { executeQuery, getConnection, closeConnection } = require("../components/
 const { resolveWallet } = require("../components/services");
 const { lineAuth } = require("../components/lineAuth");
 const { describe } = require("../components/categories");
-const { buildTxFilter, MONTH_RE } = require("../components/txFilter");
+const { buildTxFilter, txOrder, MONTH_RE } = require("../components/txFilter");
 const crypto = require("crypto");
 
 // /api/me-export — the signed-in user's records for one wallet as CSV
@@ -10,6 +10,7 @@ const crypto = require("crypto");
 // Times are the stored wallet time (fulldate), the same as the web page shows.
 // Filters (same as me-transactions): month=YYYY-MM, type, category, note, q.
 // month is required unless note or q is given (then: all months).
+// sort=new|old|amount_desc|amount_asc as the list (default old: oldest first).
 //   GET  ?wallet_id=&month=&type=&category=&note=&q=   (LINE token) -> the CSV
 //   POST { wallet_id, month, type, category, note, q } (LINE token) -> { url } a short-lived link
 //   GET  ?link=<signed>                                (no token)   -> the CSV
@@ -75,7 +76,8 @@ function amount(n) {
 // { month, type, category, note, q } from a query/body -> { filters, f } or { error }
 function readFilters(src) {
   const pick = (k) => (typeof src[k] === "string" && src[k] !== "" ? src[k] : undefined);
-  const filters = { month: pick("month"), type: pick("type"), category: pick("category"), note: pick("note"), q: pick("q") };
+  const filters = { month: pick("month"), type: pick("type"), category: pick("category"), note: pick("note"), q: pick("q"), sort: pick("sort") };
+  if (!txOrder(filters.sort, "old")) return { error: "Parameter 'sort' must be new, old, amount_desc or amount_asc." };
   if (filters.note !== undefined && !filters.note.trim()) filters.note = undefined;
   if (filters.q !== undefined && !filters.q.trim()) filters.q = undefined;
   if (!filters.month && !filters.note && !filters.q) {
@@ -113,7 +115,7 @@ async function sendCsv(res, uname, wallet_id, filters, fromLink = false) {
       `SELECT TO_CHAR(fulldate, 'YYYY-MM-DD HH24:MI:SS'), exvalue, category, note
          FROM expense
         WHERE uname = :uname AND wallet_id = :wallet_id${f.sql}
-        ORDER BY fulldate ASC, trans_id ASC
+        ORDER BY ${txOrder(filters.sort, "old") || txOrder("old")}
         FETCH FIRST :fetch ROWS ONLY`,
       { uname, wallet_id: wallet.wallet_id, ...f.binds, fetch: MAX_ROWS + 1 }
     );
@@ -175,7 +177,7 @@ async function createLink(req, res, uname) {
     }
     const link = signLink({
       u: uname, w: wallet.wallet_id, m: filters.month || null,
-      t: filters.type || null, c: filters.category || null, n: filters.note || null, s: filters.q || null,
+      t: filters.type || null, c: filters.category || null, n: filters.note || null, s: filters.q || null, o: filters.sort || null,
       e: Math.floor(Date.now() / 1000) + LINK_TTL_S,
     });
     res.setHeader("Cache-Control", "no-store");
@@ -205,7 +207,7 @@ module.exports = async (req, res) => {
     }
     if (p === "expired") return textError(res, 410, "ลิงก์หมดอายุแล้ว กลับไปที่แอป LINE แล้วกด \"ส่งออก CSV\" ใหม่");
     if (!p) return textError(res, 403, "ลิงก์ไม่ถูกต้อง");
-    const filters = { month: p.m || undefined, type: p.t || undefined, category: p.c || undefined, note: p.n || undefined, q: p.s || undefined };
+    const filters = { month: p.m || undefined, type: p.t || undefined, category: p.c || undefined, note: p.n || undefined, q: p.s || undefined, sort: p.o || undefined };
     if (!filters.month && !filters.note && !filters.q) return textError(res, 403, "ลิงก์ไม่ถูกต้อง");
     return sendCsv(res, p.u, String(p.w), filters, true);
   }

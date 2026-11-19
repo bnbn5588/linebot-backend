@@ -113,6 +113,12 @@
           <span class="sr-only">ค้นหาโน้ต</span>
           <input type="search" id="search" placeholder="ค้นหาโน้ต" autocomplete="off">
         </label>
+        <div class="filter filter4" role="radiogroup" aria-label="เรียงรายการ">
+          <label><input type="radio" name="txSort" value="new" checked> ใหม่สุด</label>
+          <label><input type="radio" name="txSort" value="old"> เก่าสุด</label>
+          <label><input type="radio" name="txSort" value="amount_desc"> ยอดมาก</label>
+          <label><input type="radio" name="txSort" value="amount_asc"> ยอดน้อย</label>
+        </div>
         <p class="tx-sum" id="txSummary" hidden></p>
         <ul class="tx" id="txList"></ul>
         <button class="btn ghost wide" id="more" hidden>โหลดเพิ่ม</button>

@@ -6,12 +6,13 @@ const {
 const { resolveWallet } = require("../components/services");
 const { lineAuth } = require("../components/lineAuth");
 const { parseAmount, isValidDateTime } = require("../components/utilities");
-const { buildTxFilter } = require("../components/txFilter");
+const { buildTxFilter, txOrder } = require("../components/txFilter");
 const { categorize, remember, disputeAi, describe, isValidFor, forgetIfUnused } = require("../components/categories");
 
 // /api/me-transactions — the signed-in user's records.
 //   GET    ?wallet_id=&month=YYYY-MM&q=text&limit=50&offset=0   list (newest first)
 //          &type=income|expense&category=<key>&note=<by-note key, exact>
+//          &sort=new|old|amount_desc|amount_asc (default new)
 //          (no month + note or q: first page also has by_month [{ month, count, total }])
 //   PUT    body { id, exvalue, targetdate: "YYYY-MM-DD HH:MM:SS", detail, category? }   edit
 //   DELETE ?id=   delete
@@ -28,6 +29,8 @@ async function list(req, res, connection, uname) {
   const { wallet_id, month, q, type, category, id, note } = req.query;
   const f = buildTxFilter({ month, type, category, note, q });
   if (f.error) return badRequest(res, f.error);
+  const order = txOrder(req.query.sort);
+  if (!order) return badRequest(res, "Parameter 'sort' must be new, old, amount_desc or amount_asc.");
   const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
   const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
 
@@ -51,7 +54,7 @@ async function list(req, res, connection, uname) {
     `SELECT trans_id, exvalue, TO_CHAR(fulldate, 'YYYY-MM-DD HH24:MI:SS'), note, category
        FROM expense
       WHERE uname = :uname AND wallet_id = :wallet_id${filters}
-      ORDER BY fulldate DESC, trans_id DESC
+      ORDER BY ${order}
       OFFSET :offset ROWS FETCH NEXT :fetch ROWS ONLY`,
     binds
   );

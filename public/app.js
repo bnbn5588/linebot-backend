@@ -36,7 +36,9 @@
     txMonths: null, // by_month of an all-months list (note or search)
     allNotes: null, // me-notes of the current wallet (picker), reloaded after edits
     catRange: "month", // category card: "month" | "12" (last 12 months)
+    txSort: "new", // record list: new | old | amount_desc | amount_asc
   };
+  const TX_SORTS = new Set(["new", "old", "amount_desc", "amount_asc"]);
 
   // ---------- helpers
   const store = {
@@ -203,6 +205,11 @@
 
     const savedType = store.get("type");
     if (savedType && TYPES[savedType]) setType(savedType);
+    const savedSort = store.get("txSort");
+    if (savedSort && TX_SORTS.has(savedSort)) {
+      state.txSort = savedSort;
+      document.querySelector(`input[name=txSort][value="${savedSort}"]`).checked = true;
+    }
     if (store.get("catRange") === "12") {
       state.catRange = "12";
       document.querySelector("input[name=catRange][value='12']").checked = true;
@@ -242,6 +249,7 @@
       category: state.category ? state.category.key : "",
       note: state.note ? state.note.key : "",
       q: state.q.trim(),
+      sort: state.txSort,
     };
   }
   function exportLabel() {
@@ -806,6 +814,7 @@
       wallet_id: state.wallet.wallet_id,
       month: allMonths ? "" : state.month,
       q: state.q.trim(),
+      sort: state.txSort,
       type: state.type,
       category: state.category ? state.category.key : "",
       note: state.note ? state.note.key : "",
@@ -844,7 +853,9 @@
     if (!state.tx.length) {
       list.replaceChildren(el("li", "empty", state.q || state.note ? "ไม่พบรายการ" : TYPES[state.type].empty));
     } else {
-      const byMonth = state.txMonths ? new Map(state.txMonths.map((m) => [m.month, m])) : null;
+      // month headers only when the list is in date order
+      const byDate = state.txSort === "new" || state.txSort === "old";
+      const byMonth = state.txMonths && byDate ? new Map(state.txMonths.map((m) => [m.month, m])) : null;
       let lastMonth = null;
       list.replaceChildren(...state.tx.flatMap((t) => {
         const out = [];
@@ -1124,6 +1135,14 @@
   $("more").addEventListener("click", () => run(() => loadTx(false)));
   $("exportCsv").addEventListener("click", exportCsv);
   $("pickNote").addEventListener("click", () => run(openNotePicker));
+  for (const r of document.querySelectorAll("input[name=txSort]")) {
+    r.addEventListener("change", (e) => {
+      if (!e.target.checked || !TX_SORTS.has(e.target.value)) return;
+      state.txSort = e.target.value;
+      store.set("txSort", state.txSort);
+      run(() => loadTx(true));
+    });
+  }
   for (const r of document.querySelectorAll("input[name=catRange]")) {
     r.addEventListener("change", (e) => {
       if (!e.target.checked) return;

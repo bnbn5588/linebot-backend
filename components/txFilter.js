@@ -50,4 +50,18 @@ function buildTxFilter({ month, type, category, note, q } = {}) {
   return { sql, binds };
 }
 
-module.exports = { buildTxFilter, MONTH_RE, CATEGORY_KEYS };
+// Record order: new (default) | old | amount_desc | amount_asc. Amount sorts
+// go by size (a -500 expense is bigger than a +100 income), ties newest first.
+const ORDERS = {
+  new: "fulldate DESC, trans_id DESC",
+  old: "fulldate ASC, trans_id ASC",
+  amount_desc: "ABS(exvalue) DESC, fulldate DESC, trans_id DESC",
+  amount_asc: "ABS(exvalue) ASC, fulldate DESC, trans_id DESC",
+};
+// -> ORDER BY text, or null for an unknown sort; fallback when not given
+function txOrder(sort, fallback = "new") {
+  if (sort === undefined || sort === null || sort === "") return ORDERS[fallback];
+  return Object.hasOwn(ORDERS, sort) ? ORDERS[sort] : null;
+}
+
+module.exports = { buildTxFilter, txOrder, MONTH_RE, CATEGORY_KEYS };
