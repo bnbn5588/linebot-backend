@@ -326,6 +326,7 @@
   }
 
   async function loadAll() {
+    updateMonthNav();
     await Promise.all([loadSummary(), loadTx(true), loadBudgets()]);
   }
 
@@ -1141,6 +1142,13 @@
   }
 
   // ---------- events
+  // ‹ › and "เดือนนี้" around the month picker
+  function updateMonthNav() {
+    const now = currentMonth(state.wallet.timezone);
+    $("thisMonth").hidden = state.month === now;
+    $("nextMonth").disabled = state.month >= now;
+  }
+
   async function selectMonth(ym) {
     if (!ym || ym === state.month) return;
     state.month = ym;
@@ -1196,6 +1204,9 @@
     showFilterChips();
     run(loadAll);
   });
+  $("prevMonth").addEventListener("click", () => selectMonth(addMonths(state.month, -1)));
+  $("nextMonth").addEventListener("click", () => selectMonth(addMonths(state.month, 1)));
+  $("thisMonth").addEventListener("click", () => selectMonth(currentMonth(state.wallet.timezone)));
   $("monthInput").addEventListener("change", (e) => {
     if (/^\d{4}-\d{2}$/.test(e.target.value)) selectMonth(e.target.value);
   });

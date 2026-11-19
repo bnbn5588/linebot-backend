@@ -24,10 +24,17 @@
             <div class="wallet-total">คงเหลือทั้งหมด <span class="num" id="tAll">–</span></div>
           </div>
         </div>
-        <label class="month-pick">
-          <span class="sr-only">เดือน</span>
-          <input type="month" id="monthInput">
-        </label>
+        <div class="month-nav">
+          <div class="month-row">
+            <button type="button" class="btn icon" id="prevMonth" aria-label="เดือนก่อนหน้า">‹</button>
+            <label class="month-pick">
+              <span class="sr-only">เดือน</span>
+              <input type="month" id="monthInput">
+            </label>
+            <button type="button" class="btn icon" id="nextMonth" aria-label="เดือนถัดไป">›</button>
+          </div>
+          <button type="button" class="btn this-month" id="thisMonth" hidden>เดือนนี้</button>
+        </div>
       </header>
 
       <section class="tiles" aria-label="สรุปเดือนนี้">
