@@ -35,6 +35,7 @@
     note: null, // { key, kind } picked in the by-note list or the note picker
     txMonths: null, // by_month of an all-months list (note or search)
     txDays: null, // by_day of a one-month list (day headers)
+    pendingDelete: null, // { t, at, timer, toast } while "เลิกทำ" is offered
     allNotes: null, // me-notes of the current wallet (picker), reloaded after edits
     catRange: "month", // category card: "month" | "12" (last 12 months)
     txSort: "new", // record list: new | old | amount_desc | amount_asc
@@ -337,6 +338,7 @@
   }
 
   async function loadAll() {
+    await flushDelete();
     updateMonthNav();
     await Promise.all([loadSummary(), loadTx(true), loadBudgets()]);
     requestAnimationFrame(markJump); // card heights changed
@@ -377,6 +379,8 @@
           ? `⚠️ เกินงบ ${money(b.spent - b.amount)} (${b.pct}%)`
           : `${level === "near" ? "⚠️ " : ""}ใช้ไป ${b.pct}% · เหลือ ${money(b.amount - b.spent)}`;
         btn.append(el("span", "n", `${b.icon} ${b.label}`), v, track, el("span", "d " + level, line));
+        const pace = paceLine(b);
+        if (pace) btn.append(el("span", "d pace", pace));
         btn.addEventListener("click", () => pickBudget(b.key));
         li.append(btn);
         return li;
@@ -390,6 +394,18 @@
       return o;
     }));
     pickBudget(keep || (sel.options[0] && sel.options[0].value), false);
+  }
+
+  // Current month only: what is left spread over the days left (today counts).
+  // "ใช้ได้วันละ ~290 · อีก 12 วัน รวมวันนี้" / last day: "วันนี้ใช้ได้อีก 3,200"
+  function paceLine(b) {
+    if (state.month !== currentMonth(state.wallet.timezone)) return "";
+    const left = Number(b.amount) - Number(b.spent);
+    if (!(left > 0)) return "";
+    const today = Number(nowLocal(state.wallet.timezone).date.slice(8, 10));
+    const days = daysIn(state.month) - today + 1;
+    if (days <= 1) return `วันนี้ใช้ได้อีก ${money(Math.floor(left))}`;
+    return `ใช้ได้วันละ ~${money(Math.floor(left / days))} · อีก ${days} วัน รวมวันนี้`;
   }
 
   // Fill the form with a category's budget (tap a row to change it)
@@ -848,6 +864,7 @@
 
   // ---------- transactions
   async function loadTx(reset) {
+    await flushDelete(); // "โหลดเพิ่ม" too: the offset counts the row as gone
     const seq = ++state.txSeq;
     if (reset) {
       state.offset = 0;
@@ -1172,21 +1189,97 @@
     }
   }
 
-  async function remove() {
+  // Delete with undo: the row leaves the list at once and the delete is sent
+  // after UNDO_MS, unless "เลิกทำ" is tapped. Anything that reloads the list,
+  // another delete, or leaving the page sends it right away.
+  const UNDO_MS = 5000;
+  function remove() {
     const t = state.editing;
     if (!t) return;
-    if (!window.confirm(`ลบ "${t.note}" ${money(t.exvalue, true)} ?`)) return;
-    setBusy(true);
+    closeEditor();
+    flushDelete(); // only one pending at a time
+    const at = state.tx.findIndex((x) => x.id === t.id);
+    if (at < 0) { // not on screen (should not happen): delete now
+      run(async () => { await api("me-transactions?" + q({ id: t.id }), { method: "DELETE" }); state.allNotes = null; await loadAll(); });
+      return;
+    }
+    state.tx.splice(at, 1);
+    state.offset = Math.max(0, state.offset - 1);
+    adjustHeaders(t, -1);
+    renderTx();
+    const p = { t, at, timer: setTimeout(() => commitDelete(p), UNDO_MS), toast: null };
+    state.pendingDelete = p;
+    p.toast = showUndoToast(`ลบ "${clipText(t.note || "-", 24)}" ${money(t.exvalue, true)} แล้ว`, () => undoDelete(p));
+  }
+  // day / month header totals follow the rows on screen until the reload
+  function adjustHeaders(t, sign) {
+    const fix = (list, key) => {
+      const h = list && list.find((x) => (x.day || x.month) === key);
+      if (h) { h.count += sign; h.total = Math.round((Number(h.total) + sign * Number(t.exvalue)) * 100) / 100; }
+    };
+    fix(state.txDays, t.datetime.slice(0, 10));
+    fix(state.txMonths, t.datetime.slice(0, 7));
+  }
+  function undoDelete(p) {
+    if (state.pendingDelete !== p) return;
+    clearTimeout(p.timer);
+    state.pendingDelete = null;
+    p.toast.remove();
+    state.tx.splice(Math.min(p.at, state.tx.length), 0, p.t);
+    state.offset += 1;
+    adjustHeaders(p.t, 1);
+    renderTx();
+    showToast("คืนรายการแล้ว");
+  }
+  async function commitDelete(p) {
+    if (state.pendingDelete !== p) return;
+    clearTimeout(p.timer);
+    state.pendingDelete = null;
+    p.toast.remove();
     try {
-      await api("me-transactions?" + q({ id: t.id }), { method: "DELETE" });
+      await api("me-transactions?" + q({ id: p.t.id }), { method: "DELETE" });
       state.allNotes = null;
-      closeEditor();
+    } catch (e) {
+      if (e instanceof AuthError) return;
+      if (e.status !== 404) showToast("ลบไม่สำเร็จ: " + e.message);
+    }
+    await run(async () => {
       await loadAll();
       if ($("memoryCard").open) await loadMemory();
-    } catch (e) {
-      if (!(e instanceof AuthError)) setFormError(e.message);
-      setBusy(false);
-    }
+    });
+  }
+  // send a pending delete now; the reload that follows is the caller's
+  function flushDelete() {
+    const p = state.pendingDelete;
+    if (!p) return null;
+    clearTimeout(p.timer);
+    state.pendingDelete = null;
+    p.toast.remove();
+    state.allNotes = null;
+    return api("me-transactions?" + q({ id: p.t.id }), { method: "DELETE" }).catch((e) => {
+      if (!(e instanceof AuthError) && e.status !== 404) showToast("ลบไม่สำเร็จ: " + e.message);
+    });
+  }
+  // closing LIFF / switching app: the request must outlive the page
+  function flushOnLeave() {
+    const p = state.pendingDelete;
+    if (!p) return;
+    clearTimeout(p.timer);
+    state.pendingDelete = null;
+    p.toast.remove();
+    try {
+      fetch("/api/me-transactions?" + q({ id: p.t.id }), { method: "DELETE", headers: { Authorization: "Bearer " + state.token }, keepalive: true });
+    } catch { /* page is going away */ }
+  }
+  function showUndoToast(msg, onUndo) {
+    const t = el("div", "toast undo");
+    t.setAttribute("role", "status");
+    const b = el("button", "", "เลิกทำ");
+    b.type = "button";
+    b.addEventListener("click", onUndo);
+    t.append(el("span", "", msg), b);
+    document.body.append(t);
+    return t;
   }
 
   // ---------- type filter
@@ -1352,6 +1445,8 @@
   $("editForm").addEventListener("submit", save);
   $("btnCancel").addEventListener("click", closeEditor);
   $("btnDelete").addEventListener("click", remove);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushOnLeave(); });
+  window.addEventListener("pagehide", flushOnLeave);
   let resizeTimer;
   window.addEventListener("resize", () => {
     clearTimeout(resizeTimer);

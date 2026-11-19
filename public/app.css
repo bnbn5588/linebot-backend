@@ -293,3 +293,13 @@ html { scroll-padding-top: 64px; }
 .fab[hidden] { display: none; }
 .toast { bottom: calc(88px + env(safe-area-inset-bottom)); }
 @media (max-width: 360px) { .jump { gap: 3px; } .jump button { padding: 6px 8px; } }
+
+/* delete with undo */
+.toast.undo { display: flex; align-items: center; gap: 12px; width: max-content; padding: 6px 6px 6px 14px; }
+.toast.undo span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.toast.undo button {
+  flex: none; font: inherit; font-weight: 700; min-height: 36px; padding: 6px 12px; cursor: pointer;
+  background: transparent; color: var(--bg); border: 1px solid currentColor; border-radius: 8px;
+}
+/* budget: per-day pace (current month) */
+.budgets .d.pace { color: var(--text-secondary); }
