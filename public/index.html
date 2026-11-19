@@ -68,7 +68,7 @@
         <label><input type="radio" name="type" value="income"> รายรับ</label>
       </div>
 
-      <section class="card">
+      <section class="card" id="secChart">
         <div class="card-head">
           <h2 id="chartTitle">คงเหลือรายเดือน</h2>
           <div class="legend" id="chartLegend" aria-hidden="true">
@@ -103,6 +103,8 @@
       <section class="card" id="budgetCard">
         <div class="card-head"><h2>งบรายเดือน</h2><span class="muted" id="budgetMonth"></span></div>
         <ul class="notes cats budgets" id="budgetList"></ul>
+        <button type="button" class="btn ghost wide budget-toggle" id="budgetToggle" aria-expanded="false" aria-controls="budgetEdit" hidden>✎ ตั้ง / แก้ไขงบ</button>
+        <div id="budgetEdit">
         <form class="budget-form" id="budgetForm">
           <label class="field">หมวด
             <select id="bCategory"></select>
@@ -114,6 +116,7 @@
           <button type="button" class="btn danger" id="bRemove" hidden>ลบงบ</button>
         </form>
         <p class="muted budget-help">งบใช้ทุกเดือนของกระเป๋านี้ บอทจะเตือนในแชทตอนบันทึกรายจ่ายที่ทำให้ใช้ถึง 80% และเมื่อเกินงบ</p>
+        </div>
       </section>
 
       <section class="card" id="secNotes">

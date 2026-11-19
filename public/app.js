@@ -347,6 +347,7 @@
   // ---------- budgets (per expense category, every month of this wallet)
   async function loadBudgets() {
     $("budgetMonth").textContent = monthLabel(state.month);
+    const done = showLoading(["budgetCard"]);
     try {
       state.budgets = (await api("me-budget?" + q({ wallet_id: state.wallet.wallet_id, month: state.month }))).budgets;
     } catch (e) {
@@ -354,6 +355,8 @@
       state.budgets = [];
       $("budgetList").replaceChildren(el("li", "empty", "โหลดงบไม่สำเร็จ"));
       return;
+    } finally {
+      done();
     }
     renderBudgets();
   }
@@ -394,6 +397,19 @@
       return o;
     }));
     pickBudget(keep || (sel.options[0] && sel.options[0].value), false);
+    setBudgetEdit(state.budgetOpen);
+  }
+
+  // The form folds away behind "✎ ตั้ง / แก้ไขงบ" once a budget exists
+  // (no budget yet: always open). Tapping a budget row opens it too.
+  function setBudgetEdit(open) {
+    const none = !(state.budgets || []).length;
+    state.budgetOpen = !!open;
+    const show = none || state.budgetOpen;
+    $("budgetEdit").hidden = !show;
+    $("budgetToggle").hidden = none;
+    $("budgetToggle").setAttribute("aria-expanded", String(show));
+    $("budgetToggle").textContent = show ? "ซ่อนฟอร์มงบ" : "✎ ตั้ง / แก้ไขงบ";
   }
 
   // Current month only: what is left spread over the days left (today counts).
@@ -412,6 +428,7 @@
 
   // Fill the form with a category's budget (tap a row to change it)
   function pickBudget(key, focus = true) {
+    if (focus) setBudgetEdit(true);
     const sel = $("bCategory");
     if (key) sel.value = key;
     const b = (state.budgets || []).find((x) => x.key === sel.value);
@@ -428,6 +445,7 @@
     try {
       await api("me-budget", { method: "PUT", body: { wallet_id: state.wallet.wallet_id, category: sel.value, amount } });
       showToast(amount ? `ตั้งงบ ${label} ${money(amount)} ต่อเดือนแล้ว` : `ลบงบ ${label} แล้ว`);
+      state.budgetOpen = false; // done: fold the form again
       await loadBudgets();
     } catch (e) {
       if (!(e instanceof AuthError)) showToast("บันทึกงบไม่สำเร็จ: " + e.message);
@@ -437,7 +455,37 @@
   }
 
   // ---------- summary
+  // Loading look (after LOADING_MS, so quick loads do not flash): tiles turn
+  // into grey bars, card contents fade under a moving line, aria-busy set.
+  const LOADING_MS = 150;
+  function showLoading(ids) {
+    const els = ids.map($).filter(Boolean);
+    const timer = setTimeout(() => {
+      for (const e of els) { e.classList.add("loading"); e.setAttribute("aria-busy", "true"); }
+    }, LOADING_MS);
+    return () => {
+      clearTimeout(timer);
+      for (const e of els) { e.classList.remove("loading"); e.removeAttribute("aria-busy"); }
+    };
+  }
+  function txSkeleton() {
+    return Array.from({ length: 5 }, () => {
+      const li = el("li", "sk");
+      li.setAttribute("aria-hidden", "true");
+      li.append(el("span", "b w60"), el("span", "b w20"), el("span", "b w30 s"), el("span", "b w25 s"));
+      return li;
+    });
+  }
+
   async function loadSummary() {
+    const done = showLoading(["secOverview", "secChart", "secCats", "secNotes"]);
+    try {
+      await loadSummaryData();
+    } finally {
+      done();
+    }
+  }
+  async function loadSummaryData() {
     const data = await api("me-summary?" + q({ wallet_id: state.wallet.wallet_id, month: state.month, type: state.type, category: state.category ? state.category.key : "", note: state.note ? state.note.key : "", range: state.catRange === "12" ? "12" : "" }));
     state.summary = data;
     renderTiles();
@@ -876,7 +924,38 @@
     const allMonths = listAllMonths();
     $("txMonth").textContent = allMonths ? "ทุกเดือน" : monthLabel(state.month);
     if (!$("exportCsv").disabled) $("exportCsv").textContent = exportLabel();
-    const data = await api("me-transactions?" + q({
+    // new list: grey rows in its place; "โหลดเพิ่ม": the button says so
+    const list = $("txList"), more = $("more");
+    const skel = reset && setTimeout(() => {
+      if (seq !== state.txSeq) return;
+      $("txSummary").hidden = true;
+      list.replaceChildren(...txSkeleton());
+      list.setAttribute("aria-busy", "true");
+    }, LOADING_MS);
+    if (!reset) { more.disabled = true; more.textContent = "กำลังโหลด…"; }
+    let data;
+    try {
+      data = await loadTxPage(allMonths);
+    } finally {
+      clearTimeout(skel);
+      if (seq === state.txSeq) {
+        list.removeAttribute("aria-busy");
+        more.disabled = false;
+        more.textContent = "โหลดเพิ่ม";
+      }
+    }
+    if (seq !== state.txSeq) return; // a newer search replaced this one
+    if (reset) {
+      state.txMonths = allMonths ? data.by_month || [] : null;
+      state.txDays = allMonths ? null : data.by_day || null;
+    }
+    state.tx = state.tx.concat(data.transactions);
+    state.offset += data.transactions.length;
+    state.hasMore = data.has_more;
+    renderTx();
+  }
+  function loadTxPage(allMonths) {
+    return api("me-transactions?" + q({
       wallet_id: state.wallet.wallet_id,
       month: allMonths ? "" : state.month,
       q: state.q.trim(),
@@ -887,15 +966,6 @@
       limit: PAGE,
       offset: state.offset,
     }));
-    if (seq !== state.txSeq) return; // a newer search replaced this one
-    if (reset) {
-      state.txMonths = allMonths ? data.by_month || [] : null;
-      state.txDays = allMonths ? null : data.by_day || null;
-    }
-    state.tx = state.tx.concat(data.transactions);
-    state.offset += data.transactions.length;
-    state.hasMore = data.has_more;
-    renderTx();
   }
 
   // "86 รายการ ใน 14 เดือน · รวม −4,300 · เฉลี่ย −307/เดือน" for an all-months list
@@ -1350,6 +1420,10 @@
     saveBudget(amount);
   });
   $("bRemove").addEventListener("click", () => saveBudget(null));
+  $("budgetToggle").addEventListener("click", () => {
+    setBudgetEdit(!state.budgetOpen);
+    if (state.budgetOpen) $("bCategory").focus();
+  });
 
   $("walletSelect").addEventListener("change", (e) => {
     state.wallet = state.wallets.find((w) => String(w.wallet_id) === e.target.value) || state.wallet;

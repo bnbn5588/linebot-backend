@@ -303,3 +303,31 @@ html { scroll-padding-top: 64px; }
 }
 /* budget: per-day pace (current month) */
 .budgets .d.pace { color: var(--text-secondary); }
+
+/* loading: grey bars instead of old numbers, card contents fade under a moving line */
+@keyframes sk-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+@keyframes sk-line { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+.tiles.loading .tile-value, .tiles.loading .tile-cmp {
+  color: transparent; background: var(--surface-2); border-radius: 6px; width: 70%;
+  animation: sk-pulse 1.2s ease-in-out infinite;
+}
+.tiles.loading .tile-cmp { width: 85%; }
+.tiles.loading .tile-cmp * { color: transparent; }
+.card.loading { overflow: hidden; }
+.card.loading::before {
+  content: ""; position: absolute; top: 0; left: 0; width: 40%; height: 3px; border-radius: 3px;
+  background: var(--accent); animation: sk-line 1s ease-in-out infinite;
+}
+.card.loading > ul, .card.loading .chart, .card.loading .chart-sel, .card.loading .chart-stats, .card.loading .cat-range { opacity: 0.4; transition: opacity 0.15s; }
+.tx li.sk { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; padding: 12px 2px; border-bottom: 1px solid var(--border); }
+.tx li.sk .b { display: block; height: 14px; border-radius: 6px; background: var(--surface-2); animation: sk-pulse 1.2s ease-in-out infinite; }
+.tx li.sk .b.s { height: 10px; }
+.tx li.sk .w60 { width: 60%; } .tx li.sk .w20 { width: 48px; } .tx li.sk .w30 { width: 30%; } .tx li.sk .w25 { width: 64px; justify-self: end; }
+@media (prefers-reduced-motion: reduce) {
+  .tiles.loading .tile-value, .tiles.loading .tile-cmp, .tx li.sk .b { animation: none; }
+  .card.loading::before { animation: none; width: 100%; opacity: 0.5; }
+}
+
+/* budget form folds away once a budget exists */
+#budgetEdit[hidden] { display: none; }
+.budget-toggle { margin-top: 8px; }
