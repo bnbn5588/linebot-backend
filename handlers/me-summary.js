@@ -113,7 +113,7 @@ module.exports = async (req, res) => {
       }
       const notes = await executeQuery(
         connection,
-        `SELECT lower(trim(note)), sum(exvalue), count(*), TO_CHAR(max(fulldate), 'YYYY-MM-DD HH24:MI:SS')
+        `SELECT lower(trim(note)), sum(exvalue), count(*)
            FROM expense
           WHERE uname = :uname AND wallet_id = :wallet_id ${monthFilter}${typeSql}${categoryFilter}
           GROUP BY lower(trim(note))
@@ -257,7 +257,7 @@ module.exports = async (req, res) => {
           month: month || null,
           type: type || "all",
           category: category || null,
-          by_note: notes.rows.map((r) => ({ note: r[0], total: r[1], count: r[2], last: r[3], ...cmpFields(noteCmp, r[0]) })),
+          by_note: notes.rows.map((r) => ({ note: r[0], total: r[1], count: r[2], ...cmpFields(noteCmp, r[0]) })),
           // prev_total: the same category in the month before (0 = none; null = no month);
           // avg_total: its average over the 3 months before
           by_category: cats.rows.map((r) => ({

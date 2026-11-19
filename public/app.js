@@ -36,7 +36,6 @@
     txMonths: null, // by_month of an all-months list (note or search)
     allNotes: null, // me-notes of the current wallet (picker), reloaded after edits
     catRange: "month", // category card: "month" | "12" (last 12 months)
-    noteSort: "amount", // by-note card: amount | count | last | name
   };
 
   // ---------- helpers
@@ -204,11 +203,6 @@
 
     const savedType = store.get("type");
     if (savedType && TYPES[savedType]) setType(savedType);
-    const savedSort = store.get("noteSort");
-    if (savedSort && NOTE_SORTS[savedSort]) {
-      state.noteSort = savedSort;
-      document.querySelector(`input[name=noteSort][value="${savedSort}"]`).checked = true;
-    }
     if (store.get("catRange") === "12") {
       state.catRange = "12";
       document.querySelector("input[name=catRange][value='12']").checked = true;
@@ -594,22 +588,9 @@
     }));
   }
 
-  // Thai names first, then the rest (Latin, digits), each in its own order
-  const thaiFirst = (a, b) => {
-    const ta = /^[\u0E00-\u0E7F]/.test(a) ? 0 : 1;
-    const tb = /^[\u0E00-\u0E7F]/.test(b) ? 0 : 1;
-    return ta - tb || a.localeCompare(b, "th");
-  };
-  const NOTE_SORTS = {
-    amount: (a, b) => Math.abs(b.total) - Math.abs(a.total) || b.count - a.count,
-    count: (a, b) => b.count - a.count || Math.abs(b.total) - Math.abs(a.total),
-    last: (a, b) => String(b.last || "").localeCompare(String(a.last || "")) || b.count - a.count,
-    name: (a, b) => thaiFirst(a.note || "", b.note || ""),
-  };
-
   function renderNotes() {
     const list = $("notes");
-    const notes = [...state.summary.by_note].sort(NOTE_SORTS[state.noteSort] || NOTE_SORTS.amount);
+    const notes = state.summary.by_note;
     if (!notes.length) {
       list.replaceChildren(el("li", "empty", TYPES[state.type].empty));
       return;
@@ -632,7 +613,6 @@
       track.append(fill);
       b.append(name, v, track);
       const kind = n.total > 0 ? "income" : "expense";
-      if (state.noteSort === "last" && n.last) b.append(el("span", "d", `ล่าสุด ${whenLabel(n.last)}`));
       for (const line of compareLines({ ...n, kind }, true)) b.append(el("span", "d", line));
       b.addEventListener("click", () => setNoteFilter(on ? null : { key: n.note, kind }));
       li.append(b);
@@ -1144,14 +1124,6 @@
   $("more").addEventListener("click", () => run(() => loadTx(false)));
   $("exportCsv").addEventListener("click", exportCsv);
   $("pickNote").addEventListener("click", () => run(openNotePicker));
-  for (const r of document.querySelectorAll("input[name=noteSort]")) {
-    r.addEventListener("change", (e) => {
-      if (!e.target.checked || !NOTE_SORTS[e.target.value]) return;
-      state.noteSort = e.target.value;
-      store.set("noteSort", state.noteSort);
-      if (state.summary) renderNotes();
-    });
-  }
   for (const r of document.querySelectorAll("input[name=catRange]")) {
     r.addEventListener("change", (e) => {
       if (!e.target.checked) return;
