@@ -35,6 +35,8 @@
     note: null, // { key, kind } picked in the by-note list or the note picker
     txMonths: null, // by_month of an all-months list (note or search)
     txDays: null, // by_day of a one-month list (day headers)
+    sumSeq: 0, // latest me-summary / me-budget request (older answers are dropped)
+    budgetSeq: 0,
     pendingDelete: null, // { t, at, timer, toast } while "เลิกทำ" is offered
     allNotes: null, // me-notes of the current wallet (picker), reloaded after edits
     catRange: "month", // category card: "month" | "12" (last 12 months)
@@ -347,11 +349,15 @@
   // ---------- budgets (per expense category, every month of this wallet)
   async function loadBudgets() {
     $("budgetMonth").textContent = monthLabel(state.month);
-    const done = showLoading(["budgetCard"]);
+    const seq = ++state.budgetSeq;
+    const latest = () => seq === state.budgetSeq;
+    const done = showLoading(["budgetCard"], latest);
     try {
-      state.budgets = (await api("me-budget?" + q({ wallet_id: state.wallet.wallet_id, month: state.month }))).budgets;
+      const budgets = (await api("me-budget?" + q({ wallet_id: state.wallet.wallet_id, month: state.month }))).budgets;
+      if (!latest()) return;
+      state.budgets = budgets;
     } catch (e) {
-      if (e instanceof AuthError) return;
+      if (e instanceof AuthError || !latest()) return;
       state.budgets = [];
       $("budgetList").replaceChildren(el("li", "empty", "โหลดงบไม่สำเร็จ"));
       return;
@@ -458,13 +464,17 @@
   // Loading look (after LOADING_MS, so quick loads do not flash): tiles turn
   // into grey bars, card contents fade under a moving line, aria-busy set.
   const LOADING_MS = 150;
-  function showLoading(ids) {
+  // isLatest: an older request (replaced by a newer one) neither marks nor
+  // clears the cards — the newer one does.
+  function showLoading(ids, isLatest) {
     const els = ids.map($).filter(Boolean);
     const timer = setTimeout(() => {
+      if (!isLatest()) return;
       for (const e of els) { e.classList.add("loading"); e.setAttribute("aria-busy", "true"); }
     }, LOADING_MS);
     return () => {
       clearTimeout(timer);
+      if (!isLatest()) return;
       for (const e of els) { e.classList.remove("loading"); e.removeAttribute("aria-busy"); }
     };
   }
@@ -478,15 +488,20 @@
   }
 
   async function loadSummary() {
-    const done = showLoading(["secOverview", "secChart", "secCats", "secNotes"]);
+    const seq = ++state.sumSeq;
+    const latest = () => seq === state.sumSeq;
+    const done = showLoading(["secOverview", "secChart", "secCats", "secNotes"], latest);
     try {
-      await loadSummaryData();
+      await loadSummaryData(latest);
+    } catch (e) {
+      if (latest()) throw e; // an old request failing does not matter any more
     } finally {
       done();
     }
   }
-  async function loadSummaryData() {
+  async function loadSummaryData(latest) {
     const data = await api("me-summary?" + q({ wallet_id: state.wallet.wallet_id, month: state.month, type: state.type, category: state.category ? state.category.key : "", note: state.note ? state.note.key : "", range: state.catRange === "12" ? "12" : "" }));
+    if (!latest()) return; // a newer month / wallet / filter replaced this one
     state.summary = data;
     renderTiles();
     renderChart();
