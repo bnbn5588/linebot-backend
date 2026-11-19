@@ -108,6 +108,7 @@
       <section class="card">
         <div class="card-head"><h2>รายการ</h2><span class="muted" id="txMonth"></span></div>
         <div class="chip-row" id="catChipRow" hidden></div>
+        <button class="btn primary wide add-tx" id="addTx" type="button" aria-haspopup="dialog">＋ เพิ่มรายการ</button>
         <button class="btn wide pick-note" id="pickNote" type="button" aria-haspopup="dialog">📝 เลือกโน้ต (ทุกเดือน)</button>
         <label class="search">
           <span class="sr-only">ค้นหาโน้ต</span>
@@ -135,7 +136,7 @@
 
   <dialog id="editor" class="sheet">
     <form id="editForm" method="dialog">
-      <h2>แก้ไขรายการ</h2>
+      <h2 id="editTitle">แก้ไขรายการ</h2>
       <div class="seg" role="radiogroup" aria-label="ประเภท">
         <label><input type="radio" name="sign" value="-" checked> รายจ่าย</label>
         <label><input type="radio" name="sign" value="+"> รายรับ</label>

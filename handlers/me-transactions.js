@@ -8,12 +8,18 @@ const { lineAuth } = require("../components/lineAuth");
 const { parseAmount, isValidDateTime } = require("../components/utilities");
 const { buildTxFilter, txOrder } = require("../components/txFilter");
 const { categorize, remember, disputeAi, describe, isValidFor, forgetIfUnused } = require("../components/categories");
+const oracledb = require("oracledb");
+const { afterResponse } = require("../components/background");
+const { aiFill, aiSkipReason } = require("../components/aiFill");
+const { budgetAlert } = require("../components/budget");
 
 // /api/me-transactions — the signed-in user's records.
 //   GET    ?wallet_id=&month=YYYY-MM&q=text&limit=50&offset=0   list (newest first)
 //          &type=income|expense&category=<key>&note=<by-note key, exact>
 //          &sort=new|old|amount_desc|amount_asc (default new)
 //          (no month + note or q: first page also has by_month [{ month, count, total }])
+//   POST   body { wallet_id, exvalue, targetdate: "YYYY-MM-DD HH:MM:SS", detail, category? }   add
+//          (no category: picked like the bot's add — #tag > memory > shared > keyword, AI after)
 //   PUT    body { id, exvalue, targetdate: "YYYY-MM-DD HH:MM:SS", detail, category? }   edit
 //   DELETE ?id=   delete
 // Every statement is scoped by uname from the verified LINE token, so a user
@@ -84,6 +90,88 @@ async function list(req, res, connection, uname) {
       offset,
       limit,
       ...(byMonth ? { by_month: byMonth } : {}),
+    },
+  });
+}
+
+// Shared checks for add / edit -> { value, note } or { error }
+function readRecord({ exvalue, targetdate, detail, category }) {
+  const value = parseAmount(exvalue);
+  if (value === null) {
+    return { error: "Field 'exvalue' must be a non-zero number with at most 2 decimals and below 10,000,000 (e.g. -120, +1,500.50)." };
+  }
+  if (!isValidDateTime(targetdate)) return { error: "Field 'targetdate' must be a valid 'YYYY-MM-DD HH:MM:SS'." };
+  const note = typeof detail === "string" ? detail.replace(/\s+/g, " ").trim() : "";
+  if (!note) return { error: "Field 'detail' is required." };
+  if (Buffer.byteLength(note, "utf8") > NOTE_MAX_BYTES) return { error: "Field 'detail' is too long." };
+  if (category !== undefined && category !== null && category !== "") {
+    if (typeof category !== "string" || !isValidFor(category, value)) {
+      return { error: "Field 'category' is not a valid category for this amount." };
+    }
+  }
+  return { value, note };
+}
+
+async function create(req, res, connection, uname) {
+  const body = req.body || {};
+  const { wallet_id, targetdate, category } = body;
+  if (wallet_id !== undefined && wallet_id !== null && wallet_id !== "" && !/^\d{1,9}$/.test(String(wallet_id))) {
+    return badRequest(res, "Field 'wallet_id' must be a number.");
+  }
+  const r = readRecord(body);
+  if (r.error) return badRequest(res, r.error);
+  const { value } = r;
+  const wallet = await resolveWallet(connection, uname, wallet_id === undefined || wallet_id === null || wallet_id === "" ? undefined : String(wallet_id));
+  if (!wallet) {
+    return res.status(404).json({ status: "error", message: "Wallet not found" });
+  }
+
+  // Same as the bot's add: a recognised #tag is removed from the stored note.
+  // A category chosen in the form wins and is remembered for this note.
+  const cat = await categorize(connection, uname, r.note, value);
+  const note = cat.note || r.note;
+  let chosen = null;
+  if (category) {
+    chosen = category;
+    await remember(connection, uname, note, category);
+    if (category !== cat.category) await disputeAi(connection, note, category);
+  }
+  const finalCategory = chosen || cat.category;
+  const source = chosen ? "user" : cat.source;
+
+  const ins = await executeQuery(
+    connection,
+    `INSERT INTO expense(uname, exvalue, fulldate, note, wallet_id, category)
+     VALUES (:uname, :exvalue, TO_DATE(:targetdate, 'YYYY-MM-DD HH24:MI:SS'), :note, :wallet_id, :category)
+     RETURNING trans_id INTO :id`,
+    {
+      uname, exvalue: value, targetdate, note, wallet_id: wallet.wallet_id, category: finalCategory,
+      id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+    }
+  );
+  if (!ins.rowsAffected) {
+    return res.status(500).json({ status: "error", message: "Failed to add record." });
+  }
+  const id = ins.outBinds.id[0];
+  // Nothing found a category: ask AI after responding (as the bot's add)
+  let aiPending = false;
+  if (source === "fallback") {
+    aiPending = !(await aiSkipReason(connection, note, value));
+    if (aiPending) await afterResponse(() => aiFill({ uname, id, note, amount: value }));
+  }
+  const budget = await budgetAlert(connection, {
+    uname, walletId: Number(wallet.wallet_id), category: finalCategory, date: targetdate.slice(0, 10), added: -value,
+  });
+  return res.status(200).json({
+    status: "success",
+    data: {
+      id,
+      wallet_id: wallet.wallet_id,
+      exvalue: value,
+      datetime: targetdate,
+      note,
+      category: { ...describe(finalCategory, value), source, ...(aiPending ? { ai_pending: true } : {}) },
+      ...(budget ? { budget } : {}),
     },
   });
 }
@@ -184,12 +272,12 @@ async function remove(req, res, connection, uname) {
   return res.status(200).json({ status: "success", data: { id: Number(id), memory_forgotten: forgot } });
 }
 
-const methods = { GET: list, PUT: update, DELETE: remove };
+const methods = { GET: list, POST: create, PUT: update, DELETE: remove };
 
 module.exports = async (req, res) => {
   const action = Object.hasOwn(methods, req.method) ? methods[req.method] : null;
   if (!action) {
-    return res.status(405).json({ status: "error", message: "Use GET, PUT or DELETE." });
+    return res.status(405).json({ status: "error", message: "Use GET, POST, PUT or DELETE." });
   }
   return lineAuth(req, res, async (uname) => {
     let connection;

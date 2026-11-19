@@ -249,3 +249,6 @@ select, input {
 /* record list sort */
 .filter.filter4 { grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 4px 0 8px; }
 .filter.filter4 label { font-size: 13px; }
+
+/* add record button */
+.add-tx { margin: 0 0 8px; }

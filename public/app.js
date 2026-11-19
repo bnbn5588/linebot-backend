@@ -960,8 +960,41 @@
 
   // ---------- editor
   const dlg = $("editor");
+  // "2026-11-19", "14:05" now in the wallet's time zone
+  function nowLocal(timeZone) {
+    const parts = (opts) => {
+      try { return new Intl.DateTimeFormat("en-CA", { timeZone, ...opts }).formatToParts(new Date()); } catch { return new Intl.DateTimeFormat("en-CA", opts).formatToParts(new Date()); }
+    };
+    const get = (ps, t) => (ps.find((p) => p.type === t) || {}).value;
+    const d = parts({ year: "numeric", month: "2-digit", day: "2-digit" });
+    const t = parts({ hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+    return { date: `${get(d, "year")}-${get(d, "month")}-${get(d, "day")}`, time: `${get(t, "hour")}:${get(t, "minute")}` };
+  }
+
+  // New record: same form as editing. Date = now; when another month is
+  // open, the 1st of that month.
+  function openAdd() {
+    state.editing = { isNew: true };
+    $("editTitle").textContent = "เพิ่มรายการ";
+    $("btnDelete").hidden = true;
+    dlg.querySelector('input[name=sign][value="-"]').checked = true;
+    const now = nowLocal(state.wallet.timezone);
+    const sameMonth = now.date.slice(0, 7) === state.month;
+    $("fAmount").value = "";
+    $("fDate").value = sameMonth ? now.date : `${state.month}-01`;
+    $("fTime").value = sameMonth ? now.time : "12:00";
+    $("fNote").value = "";
+    fillCategorySelect("expense", "");
+    setFormError("");
+    setBusy(false);
+    if (dlg.showModal) dlg.showModal(); else dlg.setAttribute("open", "");
+    $("fAmount").focus();
+  }
+
   function openEditor(t) {
     state.editing = t;
+    $("editTitle").textContent = "แก้ไขรายการ";
+    $("btnDelete").hidden = false;
     const [d, time] = t.datetime.split(" ");
     dlg.querySelector(`input[name=sign][value="${t.exvalue < 0 ? "-" : "+"}"]`).checked = true;
     $("fAmount").value = String(Math.abs(t.exvalue));
@@ -976,12 +1009,20 @@
   function fillCategorySelect(kind, selected) {
     const sel = $("fCategory");
     const options = state.categories.filter((c) => c.kind === kind);
-    sel.replaceChildren(...options.map((c) => {
+    const items = options.map((c) => {
       const o = el("option", "", `${c.icon} ${c.label}`);
       o.value = c.key;
       return o;
-    }));
-    sel.value = options.some((c) => c.key === selected) ? selected : (kind === "income" ? "other_income" : "other_expense");
+    });
+    // adding: let the system pick (as the bot does) unless the user chooses
+    const isNew = !!(state.editing && state.editing.isNew);
+    if (isNew) {
+      const auto = el("option", "", "✨ ให้ระบบเดาให้");
+      auto.value = "";
+      items.unshift(auto);
+    }
+    sel.replaceChildren(...items);
+    sel.value = options.some((c) => c.key === selected) ? selected : isNew ? "" : (kind === "income" ? "other_income" : "other_expense");
   }
   for (const r of dlg.querySelectorAll("input[name=sign]")) {
     r.addEventListener("change", (e) => {
@@ -1009,6 +1050,7 @@
     const amount = $("fAmount").value.trim().replace(/^[+-]/, "");
     let time = $("fTime").value;
     if (/^\d{2}:\d{2}$/.test(time)) time += ":00";
+    if (t.isNew) return addRecord(sign, amount, time);
     const body = {
       id: t.id,
       exvalue: sign + amount,
@@ -1028,6 +1070,40 @@
       await api("me-transactions", { method: "PUT", body });
       state.allNotes = null;
       closeEditor();
+      await loadAll();
+      if ($("memoryCard").open) await loadMemory();
+    } catch (e) {
+      if (!(e instanceof AuthError)) setFormError(e.message);
+      setBusy(false);
+    }
+  }
+
+  async function addRecord(sign, amount, time) {
+    const body = {
+      wallet_id: state.wallet.wallet_id,
+      exvalue: sign + amount,
+      targetdate: `${$("fDate").value} ${time}`,
+      detail: $("fNote").value,
+    };
+    if ($("fCategory").value) body.category = $("fCategory").value;
+    setBusy(true);
+    try {
+      const r = await api("me-transactions", { method: "POST", body });
+      state.allNotes = null;
+      closeEditor();
+      const c = r.category;
+      // one toast (two would stack on the same spot)
+      const b = r.budget;
+      const warn = !b ? "" : b.level === "over"
+        ? ` · ⚠️ ${b.label} เกินงบแล้ว (${b.pct}%)`
+        : ` · ⚠️ ${b.label} ใช้ไป ${b.pct}% ของงบ`;
+      showToast(`บันทึกแล้ว ${r.note} ${money(r.exvalue, true)} → ${c.icon} ${c.label}${c.ai_pending ? " (AI กำลังช่วยเดาหมวด)" : ""}${warn}`);
+      // show the month the record went into
+      const ym = body.targetdate.slice(0, 7);
+      if (ym !== state.month) {
+        state.month = ym;
+        $("monthInput").value = ym;
+      }
       await loadAll();
       if ($("memoryCard").open) await loadMemory();
     } catch (e) {
@@ -1135,6 +1211,7 @@
   $("more").addEventListener("click", () => run(() => loadTx(false)));
   $("exportCsv").addEventListener("click", exportCsv);
   $("pickNote").addEventListener("click", () => run(openNotePicker));
+  $("addTx").addEventListener("click", openAdd);
   for (const r of document.querySelectorAll("input[name=txSort]")) {
     r.addEventListener("change", (e) => {
       if (!e.target.checked || !TX_SORTS.has(e.target.value)) return;
