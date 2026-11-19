@@ -101,6 +101,12 @@
 
       <section class="card">
         <div class="card-head"><h2>แยกตามโน้ต</h2><span class="muted" id="noteMonth"></span></div>
+        <div class="filter filter4" role="radiogroup" aria-label="เรียงโน้ต">
+          <label><input type="radio" name="noteSort" value="amount" checked> ยอดเงิน</label>
+          <label><input type="radio" name="noteSort" value="count"> บ่อยสุด</label>
+          <label><input type="radio" name="noteSort" value="last"> ล่าสุด</label>
+          <label><input type="radio" name="noteSort" value="name"> ก–ฮ</label>
+        </div>
         <div class="chip-row" id="noteChipRow" hidden></div>
         <ul class="notes cats" id="notes"></ul>
       </section>
