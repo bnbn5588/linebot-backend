@@ -37,7 +37,15 @@
         </div>
       </header>
 
-      <section class="tiles" aria-label="สรุปเดือนนี้">
+      <nav class="jump" id="jump" aria-label="ไปที่การ์ด">
+        <button type="button" data-target="secOverview">ภาพรวม</button>
+        <button type="button" data-target="secCats">หมวด</button>
+        <button type="button" data-target="budgetCard">งบ</button>
+        <button type="button" data-target="secNotes">โน้ต</button>
+        <button type="button" data-target="secTx">รายการ</button>
+      </nav>
+
+      <section class="tiles" id="secOverview" aria-label="สรุปเดือนนี้">
         <div class="tile">
           <div class="tile-label">คงเหลือเดือนนี้</div>
           <div class="tile-value" id="tBalance">–</div>
@@ -45,10 +53,12 @@
         <div class="tile">
           <div class="tile-label">รายรับ</div>
           <div class="tile-value small" id="tIncome">–</div>
+          <div class="tile-cmp" id="tIncomeCmp" hidden></div>
         </div>
         <div class="tile">
           <div class="tile-label">รายจ่าย</div>
           <div class="tile-value small" id="tExpense">–</div>
+          <div class="tile-cmp" id="tExpenseCmp" hidden></div>
         </div>
       </section>
 
@@ -80,7 +90,7 @@
         </details>
       </section>
 
-      <section class="card">
+      <section class="card" id="secCats">
         <div class="card-head"><h2>แยกตามหมวด</h2><span class="muted" id="catMonth"></span></div>
         <div class="filter filter2" role="radiogroup" aria-label="ช่วงของหมวด">
           <label><input type="radio" name="catRange" value="month" checked> เดือนนี้</label>
@@ -106,13 +116,13 @@
         <p class="muted budget-help">งบใช้ทุกเดือนของกระเป๋านี้ บอทจะเตือนในแชทตอนบันทึกรายจ่ายที่ทำให้ใช้ถึง 80% และเมื่อเกินงบ</p>
       </section>
 
-      <section class="card">
+      <section class="card" id="secNotes">
         <div class="card-head"><h2>แยกตามโน้ต</h2><span class="muted" id="noteMonth"></span></div>
         <div class="chip-row" id="noteChipRow" hidden></div>
         <ul class="notes cats" id="notes"></ul>
       </section>
 
-      <section class="card">
+      <section class="card" id="secTx">
         <div class="card-head"><h2>รายการ</h2><span class="muted" id="txMonth"></span></div>
         <div class="chip-row" id="catChipRow" hidden></div>
         <button class="btn primary wide add-tx" id="addTx" type="button" aria-haspopup="dialog">＋ เพิ่มรายการ</button>
@@ -138,6 +148,7 @@
         <p class="muted memory-help">เมื่อคุณเลือกหมวดให้โน้ตไหน ระบบจะจำไว้ใช้กับโน้ตเดียวกันครั้งต่อไป เปลี่ยนหรือลบได้ที่นี่ (รายการที่บันทึกไปแล้วไม่เปลี่ยน)</p>
         <ul class="mem" id="memoryList"></ul>
       </details>
+      <button type="button" class="fab" id="fab" aria-label="เพิ่มรายการ" aria-haspopup="dialog" hidden>＋</button>
     </section>
   </main>
 

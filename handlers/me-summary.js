@@ -174,7 +174,16 @@ module.exports = async (req, res) => {
         };
         catCmp = await sums(catExpr, typeSql, {});
         noteCmp = await sums("lower(trim(note))", typeSql + categoryFilter, category ? { category } : {});
-        compare = { prev_days: days, avg_months: avgMonths };
+        // whole wallet (no filters), same days of the month before: for the tiles
+        const pw = await executeQuery(
+          connection,
+          `SELECT sum(CASE WHEN exvalue > 0 THEN exvalue ELSE 0 END),
+                  sum(CASE WHEN exvalue < 0 THEN exvalue ELSE 0 END)
+             FROM expense
+            WHERE uname = :uname AND wallet_id = :wallet_id AND ${prevRange}`,
+          { ...binds, month, days: days || 31 }
+        );
+        compare = { prev_days: days, avg_months: avgMonths, prev_income: pw.rows[0][0] || 0, prev_expense: pw.rows[0][1] || 0 };
       }
       // range=12: per category over the 12 months ending with `month`. The
       // average divides by every month of that window (months with nothing
@@ -267,7 +276,8 @@ module.exports = async (req, res) => {
             ...cmpFields(catCmp, r[0]),
           })),
           // prev_days: month is not over yet, prev_total covers days 1..prev_days
-          // of the month before; avg_months: months averaged for avg_total
+          // of the month before; avg_months: months averaged for avg_total;
+          // prev_income / prev_expense: the whole wallet over those same days
           compare,
           // range=12 only: { from, to, months, by_category [{ ...category, total, count, avg_total }] }
           range12,

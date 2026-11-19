@@ -34,6 +34,7 @@
     category: null,
     note: null, // { key, kind } picked in the by-note list or the note picker
     txMonths: null, // by_month of an all-months list (note or search)
+    txDays: null, // by_day of a one-month list (day headers)
     allNotes: null, // me-notes of the current wallet (picker), reloaded after edits
     catRange: "month", // category card: "month" | "12" (last 12 months)
     txSort: "new", // record list: new | old | amount_desc | amount_asc
@@ -83,6 +84,16 @@
     const [d, t] = dt.split(" ");
     const [y, m, day] = d.split("-").map(Number);
     return `${day} ${monthLabel(`${y}-${String(m).padStart(2, "0")}`)} · ${t.slice(0, 5)}`;
+  }
+  // "2026-11-19" -> "วันนี้ · พฤ. 19 พ.ย." (เมื่อวาน for the day before)
+  const DAYS_TH = ["อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส."];
+  function dayLabel(d) {
+    const [y, m, day] = d.split("-").map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, day));
+    const text = `${DAYS_TH[dt.getUTCDay()]} ${day} ${MONTHS_TH[m - 1]}`;
+    const today = nowLocal(state.wallet.timezone).date;
+    const yest = new Date(Date.parse(today + "T00:00:00Z") - 86400000).toISOString().slice(0, 10);
+    return d === today ? `วันนี้ · ${text}` : d === yest ? `เมื่อวาน · ${text}` : text;
   }
   function el(tag, cls, text) {
     const e = document.createElement(tag);
@@ -328,6 +339,7 @@
   async function loadAll() {
     updateMonthNav();
     await Promise.all([loadSummary(), loadTx(true), loadBudgets()]);
+    requestAnimationFrame(markJump); // card heights changed
   }
 
   // ---------- budgets (per expense category, every month of this wallet)
@@ -427,8 +439,42 @@
     $("tBalance").textContent = money(m.balance, true);
     $("tIncome").textContent = money(m.income);
     $("tExpense").textContent = money(m.expense);
+    renderTileCompare("tIncomeCmp", m.income, "income");
+    renderTileCompare("tExpenseCmp", m.expense, "expense");
     $("tAll").textContent = money(state.summary.totals.balance, true);
     $("noteMonth").textContent = monthLabel(state.month);
+  }
+
+  // "▲ ใช้มากขึ้น 18%" / "เทียบ 1–19 ต.ค. −4,400": the whole wallet vs the
+  // month before (cut to the same days while the month is not over).
+  function renderTileCompare(id, now, kind) {
+    const box = $(id);
+    const cmp = state.summary.compare;
+    const prev = cmp ? Number(cmp[kind === "income" ? "prev_income" : "prev_expense"]) : NaN;
+    if (!cmp || !Number.isFinite(prev) || (!prev && !Number(now))) {
+      box.hidden = true;
+      return;
+    }
+    const pm = addMonths(state.month, -1);
+    const range = cmp.prev_days ? `1–${Math.min(cmp.prev_days, daysIn(pm))} ` : "";
+    const a = Math.abs(Number(now) || 0), b = Math.abs(prev);
+    const verb = kind === "income" ? "ได้" : "ใช้";
+    if (!b) {
+      box.replaceChildren(`${monthLabel(pm, false)} ${range ? `(${range.trim()}) ` : ""}ไม่มี${kind === "income" ? "รายรับ" : "รายจ่าย"}`);
+      box.hidden = false;
+      return;
+    }
+    let head;
+    {
+      const pct = Math.round(((a - b) / b) * 100);
+      head = !a ? `ยังไม่มี${kind === "income" ? "รายรับ" : "รายจ่าย"}` : pct === 0 ? "เท่าเดือนก่อน" : pct >= 1000 ? `▲ ${verb}มากขึ้น ${Math.round(a / b)} เท่า` : pct > 0 ? `▲ ${verb}มากขึ้น ${pct}%` : `▼ ${verb}น้อยลง ${-pct}%`;
+    }
+    box.replaceChildren(el("b", "", head), el("br"), `เทียบ ${range}${monthLabel(pm, false)} ${money(prev)}`);
+    box.hidden = false;
+  }
+  function daysIn(ym) {
+    const [y, m] = ym.split("-").map(Number);
+    return new Date(Date.UTC(y, m, 0)).getUTCDate();
   }
 
   // Chart + month table follow the category picked in "แยกตามหมวด"
@@ -823,7 +869,10 @@
       offset: state.offset,
     }));
     if (seq !== state.txSeq) return; // a newer search replaced this one
-    if (reset) state.txMonths = allMonths ? data.by_month || [] : null;
+    if (reset) {
+      state.txMonths = allMonths ? data.by_month || [] : null;
+      state.txDays = allMonths ? null : data.by_day || null;
+    }
     state.tx = state.tx.concat(data.transactions);
     state.offset += data.transactions.length;
     state.hasMore = data.has_more;
@@ -857,10 +906,20 @@
       // month headers only when the list is in date order
       const byDate = state.txSort === "new" || state.txSort === "old";
       const byMonth = state.txMonths && byDate ? new Map(state.txMonths.map((m) => [m.month, m])) : null;
-      let lastMonth = null;
+      // one month in date order: a header per day with that day's total
+      const byDay = !byMonth && byDate && state.txDays ? new Map(state.txDays.map((d) => [d.day, d])) : null;
+      let lastMonth = null, lastDay = null;
       list.replaceChildren(...state.tx.flatMap((t) => {
         const out = [];
         const ym = t.datetime.slice(0, 7);
+        const day = t.datetime.slice(0, 10);
+        if (byDay && day !== lastDay) {
+          lastDay = day;
+          const d = byDay.get(day);
+          const h = el("li", "dh");
+          h.append(el("span", "", dayLabel(day)), el("span", "", d ? `${money(d.total, true)} · ${d.count} รายการ` : ""));
+          out.push(h);
+        }
         if (byMonth && ym !== lastMonth) {
           lastMonth = ym;
           const m = byMonth.get(ym);
@@ -875,7 +934,7 @@
         b.append(
           el("span", "note", t.note || "-"),
           el("span", "amt", money(t.exvalue, true)),
-          el("span", "when", whenLabel(t.datetime)),
+          el("span", "when", byDay ? t.datetime.slice(11, 16) : whenLabel(t.datetime)),
           el("span", "kind", t.category ? `${t.category.icon} ${t.category.label}` : (t.exvalue >= 0 ? "รายรับ" : "รายจ่าย"))
         );
         b.addEventListener("click", () => openEditor(t));
@@ -1223,6 +1282,48 @@
   $("exportCsv").addEventListener("click", exportCsv);
   $("pickNote").addEventListener("click", () => run(openNotePicker));
   $("addTx").addEventListener("click", openAdd);
+  $("fab").addEventListener("click", openAdd);
+  // the floating ＋ shows only while the card's own add button is off screen
+  if ("IntersectionObserver" in window) {
+    new IntersectionObserver(([e]) => { $("fab").hidden = e.isIntersecting; }).observe($("addTx"));
+  } else {
+    $("fab").hidden = false;
+  }
+
+  // shortcuts bar: jump to a card; mark the card being read
+  const jump = $("jump");
+  const jumpBtns = [...jump.querySelectorAll("button[data-target]")];
+  const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  for (const b of jumpBtns) {
+    b.addEventListener("click", () => {
+      const t = $(b.dataset.target);
+      if (t) t.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+    });
+  }
+  let jumpRaf = 0;
+  function markJump() {
+    jumpRaf = 0;
+    const line = jump.getBoundingClientRect().bottom + 16;
+    let on = jumpBtns[0];
+    for (const b of jumpBtns) {
+      const t = $(b.dataset.target);
+      if (t && t.getBoundingClientRect().top <= line) on = b;
+    }
+    // at the very bottom the last card counts even when it is short
+    if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) on = jumpBtns[jumpBtns.length - 1];
+    for (const b of jumpBtns) {
+      b.classList.toggle("on", b === on);
+      if (b === on) b.setAttribute("aria-current", "true"); else b.removeAttribute("aria-current");
+    }
+    jump.classList.toggle("stuck", window.scrollY > 0 && jump.getBoundingClientRect().top <= 0);
+    // keep the marked button visible when the bar scrolls sideways
+    if (jump.scrollWidth > jump.clientWidth) {
+      const l = on.offsetLeft - 16, r = on.offsetLeft + on.offsetWidth + 16 - jump.clientWidth;
+      if (jump.scrollLeft > l) jump.scrollLeft = l; else if (jump.scrollLeft < r) jump.scrollLeft = r;
+    }
+  }
+  window.addEventListener("scroll", () => { if (!jumpRaf) jumpRaf = requestAnimationFrame(markJump); }, { passive: true });
+  markJump();
   for (const r of document.querySelectorAll("input[name=txSort]")) {
     r.addEventListener("change", (e) => {
       if (!e.target.checked || !TX_SORTS.has(e.target.value)) return;

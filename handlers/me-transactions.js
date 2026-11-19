@@ -17,7 +17,8 @@ const { budgetAlert } = require("../components/budget");
 //   GET    ?wallet_id=&month=YYYY-MM&q=text&limit=50&offset=0   list (newest first)
 //          &type=income|expense&category=<key>&note=<by-note key, exact>
 //          &sort=new|old|amount_desc|amount_asc (default new)
-//          (no month + note or q: first page also has by_month [{ month, count, total }])
+//          (no month + note or q: first page also has by_month [{ month, count, total }];
+//           with a month: first page also has by_day [{ day: YYYY-MM-DD, count, total }])
 //   POST   body { wallet_id, exvalue, targetdate: "YYYY-MM-DD HH:MM:SS", detail, category? }   add
 //          (no category: picked like the bot's add — #tag > memory > shared > keyword, AI after)
 //   PUT    body { id, exvalue, targetdate: "YYYY-MM-DD HH:MM:SS", detail, category? }   edit
@@ -81,6 +82,21 @@ async function list(req, res, connection, uname) {
     );
     byMonth = m.rows.map(([ym, count, total]) => ({ month: ym, count, total }));
   }
+  // One month: totals per day (first page only), for the day headers.
+  let byDay;
+  if (month && offset === 0) {
+    const { offset: _o, fetch: _f, ...sumBinds } = binds;
+    const d = await executeQuery(
+      connection,
+      `SELECT TO_CHAR(fulldate, 'YYYY-MM-DD'), count(*), sum(exvalue)
+         FROM expense
+        WHERE uname = :uname AND wallet_id = :wallet_id${filters}
+        GROUP BY TO_CHAR(fulldate, 'YYYY-MM-DD')
+        ORDER BY 1 DESC`,
+      sumBinds
+    );
+    byDay = d.rows.map(([day, count, total]) => ({ day, count, total }));
+  }
   return res.status(200).json({
     status: "success",
     data: {
@@ -90,6 +106,7 @@ async function list(req, res, connection, uname) {
       offset,
       limit,
       ...(byMonth ? { by_month: byMonth } : {}),
+      ...(byDay ? { by_day: byDay } : {}),
     },
   });
 }

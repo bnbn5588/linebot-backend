@@ -258,3 +258,38 @@ select, input {
 
 /* add record button */
 .add-tx { margin: 0 0 8px; }
+
+/* sticky shortcuts to each card */
+.jump {
+  position: sticky; top: 0; z-index: 5; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none;
+  margin: 0 -16px 12px; padding: 8px 16px; background: var(--bg); border-bottom: 1px solid transparent;
+}
+.jump::-webkit-scrollbar { display: none; }
+.jump.stuck { border-bottom-color: var(--border); }
+.jump button {
+  flex: 1 0 auto; font: inherit; font-size: 13px; font-weight: 600; min-height: 36px; padding: 6px 12px;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--surface-1); color: var(--text-secondary); cursor: pointer;
+}
+.jump button.on { background: var(--text-primary); border-color: var(--text-primary); color: var(--bg); }
+/* scrolling (jumps, focus, find) stops below the sticky bar */
+html { scroll-padding-top: 64px; }
+
+/* tiles: vs the month before */
+.tile-cmp { margin-top: 2px; font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; line-height: 1.4; }
+.tile-cmp b { color: var(--text-secondary); font-weight: 600; }
+
+/* record list: one header per day */
+.tx li.dh { display: flex; justify-content: space-between; gap: 8px; padding: 12px 2px 4px; font-size: 12px; font-weight: 600; color: var(--text-secondary); border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+.tx li.dh:first-child { padding-top: 4px; }
+.tx li.dh span:last-child { color: var(--text-muted); font-weight: 500; }
+
+/* floating add button (hidden while the card's own add button is on screen) */
+.app { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+.fab {
+  position: fixed; z-index: 6; right: max(16px, calc((100vw - 640px) / 2 + 16px)); bottom: calc(20px + env(safe-area-inset-bottom));
+  width: 56px; height: 56px; border-radius: 50%; border: 0; background: var(--accent); color: var(--accent-ink);
+  font: inherit; font-size: 28px; font-weight: 600; line-height: 1; cursor: pointer; box-shadow: 0 4px 14px rgb(0 0 0 / 0.25);
+}
+.fab[hidden] { display: none; }
+.toast { bottom: calc(88px + env(safe-area-inset-bottom)); }
+@media (max-width: 360px) { .jump { gap: 3px; } .jump button { padding: 6px 8px; } }
