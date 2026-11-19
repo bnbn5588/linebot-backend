@@ -405,7 +405,9 @@
     const today = Number(nowLocal(state.wallet.timezone).date.slice(8, 10));
     const days = daysIn(state.month) - today + 1;
     if (days <= 1) return `วันนี้ใช้ได้อีก ${money(Math.floor(left))}`;
-    return `ใช้ได้วันละ ~${money(Math.floor(left / days))} · อีก ${days} วัน รวมวันนี้`;
+    const per = Math.floor(left / days);
+    if (per < 1) return `เหลือไม่ถึงวันละ 1 · อีก ${days} วัน รวมวันนี้`;
+    return `ใช้ได้วันละ ~${money(per)} · อีก ${days} วัน รวมวันนี้`;
   }
 
   // Fill the form with a category's budget (tap a row to change it)
@@ -1267,6 +1269,7 @@
     clearTimeout(p.timer);
     state.pendingDelete = null;
     p.toast.remove();
+    state.reloadOnReturn = true; // tiles/charts still count it
     try {
       fetch("/api/me-transactions?" + q({ id: p.t.id }), { method: "DELETE", headers: { Authorization: "Bearer " + state.token }, keepalive: true });
     } catch { /* page is going away */ }
@@ -1445,7 +1448,14 @@
   $("editForm").addEventListener("submit", save);
   $("btnCancel").addEventListener("click", closeEditor);
   $("btnDelete").addEventListener("click", remove);
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushOnLeave(); });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushOnLeave();
+    else if (state.reloadOnReturn) {
+      state.reloadOnReturn = false;
+      state.allNotes = null;
+      run(loadAll);
+    }
+  });
   window.addEventListener("pagehide", flushOnLeave);
   let resizeTimer;
   window.addEventListener("resize", () => {
