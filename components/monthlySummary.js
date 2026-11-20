@@ -66,6 +66,7 @@ async function walletSummaries(connection, uname, month) {
        FROM expense e
        LEFT JOIN wallet w ON w.uname = e.uname AND w.wallet_id = e.wallet_id
       WHERE e.uname = :uname AND ${IN_MONTH.replace(/fulldate/g, "e.fulldate")}
+        AND w.deleted_at IS NULL
       GROUP BY e.wallet_id, w.wallet_name
       ORDER BY count(*) DESC, e.wallet_id
       FETCH FIRST ${MAX_WALLETS} ROWS ONLY`,

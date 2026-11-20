@@ -6,7 +6,7 @@ async function getWallets(connection, userid) {
   const sqlQuery = `
     SELECT wallet_id, wallet_name, timezone
     FROM wallet
-    WHERE uname = :uname
+    WHERE uname = :uname AND deleted_at IS NULL
     ORDER BY 1
   `;
   const params = [userid];
@@ -19,7 +19,7 @@ async function getWallet(connection, userid) {
   const sqlQuery = `
       SELECT u.wallet_id, w.wallet_name, w.timezone
       FROM USERS u
-      JOIN wallet w ON u.uname = w.uname AND u.wallet_id = w.wallet_id
+      JOIN wallet w ON u.uname = w.uname AND u.wallet_id = w.wallet_id AND w.deleted_at IS NULL
       WHERE u.UNAME = :uname
       ORDER BY 1
     `;
@@ -38,7 +38,7 @@ async function resolveWallet(connection, uname, walletIdParam) {
     }
     const result = await executeQuery(
       connection,
-      "SELECT wallet_id, wallet_name, timezone FROM wallet WHERE uname = :uname AND wallet_id = :wallet_id",
+      "SELECT wallet_id, wallet_name, timezone FROM wallet WHERE uname = :uname AND wallet_id = :wallet_id AND deleted_at IS NULL",
       [uname, Number(walletIdParam)]
     );
     const row = result.rows[0];

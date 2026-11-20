@@ -47,10 +47,10 @@ module.exports = async (req, res) => {
       // Establish a database connection
       connection = await getConnection();
 
-      // 1. The wallet must exist (ids can have gaps once a wallet is deleted)
+      // 1. The wallet must exist and not be in the trash (ids can have gaps)
       const target = await executeQuery(
         connection,
-        "SELECT 1 FROM wallet WHERE uname = :uname AND wallet_id = :wallet_id",
+        "SELECT 1 FROM wallet WHERE uname = :uname AND wallet_id = :wallet_id AND deleted_at IS NULL",
         { uname, wallet_id: walletIdInt }
       );
       if (!target.rows.length) {

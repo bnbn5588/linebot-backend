@@ -352,4 +352,6 @@ html { scroll-padding-top: 64px; }
 .wm-list .wm-form input { width: 100%; font-size: 16px; }
 .wm-list .wm-form .warn { color: var(--danger); font-size: 13px; margin: 0; }
 .wm-list .wm-form .form-error { margin: 0; }
+.wm-list > li.wm-sec { padding: 16px 2px 6px; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+.wm-list > li.trashed .n, .wm-list > li.trashed .v { color: var(--text-secondary); }
 .btn.danger.solid { background: var(--danger); border-color: var(--danger); color: #fff; }
