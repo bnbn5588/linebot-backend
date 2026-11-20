@@ -95,6 +95,22 @@ function isValidDateTime(s) {
   );
 }
 
+// Records may be dated from 2000-01-01 up to one year after today (catches a
+// mistyped year such as 2062 or 1926). Returns null when fine, else the message.
+const MIN_RECORD_DATE = "2000-01-01";
+function maxRecordDate(now = new Date()) {
+  const d = new Date(now.getTime());
+  d.setUTCFullYear(d.getUTCFullYear() + 1);
+  return d.toISOString().slice(0, 10);
+}
+function dateRangeError(targetdate, now) {
+  const day = String(targetdate).slice(0, 10), max = maxRecordDate(now);
+  if (day < MIN_RECORD_DATE || day > max) {
+    return `Field 'targetdate' must be between ${MIN_RECORD_DATE} and ${max}.`;
+  }
+  return null;
+}
+
 // A non-empty string that fits a VARCHAR2(n BYTE) column (Thai is 3 bytes/char).
 function isTextWithin(value, maxBytes) {
   return (
@@ -133,6 +149,9 @@ function helpCommand(lang) {
 module.exports = {
   typeCondition,
   isValidDateTime,
+  dateRangeError,
+  maxRecordDate,
+  MIN_RECORD_DATE,
   isTextWithin,
   isMissing,
   parseAmount,

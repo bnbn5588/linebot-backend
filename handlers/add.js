@@ -9,7 +9,7 @@ const { categorize, describe } = require("../components/categories");
 const { afterResponse } = require("../components/background");
 const { aiFill, aiSkipReason } = require("../components/aiFill");
 const { budgetAlert } = require("../components/budget");
-const { parseAmount, isMissing, isValidDateTime, isTextWithin, periodRange } = require("../components/utilities");
+const { parseAmount, isMissing, isValidDateTime, isTextWithin, periodRange, dateRangeError } = require("../components/utilities");
 
 module.exports = async (req, res) => {
   apiKeyMiddleware(req, res, async () => {
@@ -61,6 +61,8 @@ module.exports = async (req, res) => {
         message: "Field 'targetdate' must be in 'YYYY-MM-DD HH:MM:SS' format.",
       });
     }
+    const rangeError = dateRangeError(targetdate);
+    if (rangeError) return res.status(400).json({ status: "error", message: rangeError });
 
     let connection;
     try {

@@ -230,6 +230,7 @@
       document.querySelector("input[name=catRange][value='12']").checked = true;
     }
 
+    $("fDate").max = maxRecordDate();
     $("status").hidden = true;
     $("view").hidden = false;
     await loadAll();
@@ -348,6 +349,7 @@
       return "เชื่อมต่อไม่ได้ ตรวจสอบอินเทอร์เน็ต";
     }
     if (/^Field 'exvalue'/.test(m)) return "จำนวนเงินไม่ถูกต้อง ใส่ตัวเลขไม่เกิน 2 ตำแหน่งทศนิยม และน้อยกว่า 10,000,000";
+    if (/^Field 'targetdate' must be between/.test(m)) return DATE_RANGE_MSG;
     if (/^Field 'targetdate'/.test(m)) return "วันที่หรือเวลาไม่ถูกต้อง";
     if (/^Field 'detail' is required/.test(m)) return "ใส่โน้ตก่อน";
     if (/^Field 'detail' is too long/.test(m)) return NOTE_TOO_LONG;
@@ -356,6 +358,13 @@
     if (e && e.status === 404) return "ไม่พบข้อมูลนี้แล้ว อาจถูกลบไปแล้ว";
     if (e && e.status >= 500) return "ระบบขัดข้องชั่วคราว";
     return fallback || "ทำรายการไม่สำเร็จ ลองใหม่อีกครั้ง";
+  }
+  // Records may be dated 2000-01-01 .. one year after today (the server checks too)
+  const DATE_RANGE_MSG = "วันที่ต้องอยู่ระหว่างปี 2000 ถึงไม่เกิน 1 ปีจากวันนี้ (พิมพ์ปีผิดหรือเปล่า?)";
+  function maxRecordDate() {
+    const d = new Date();
+    d.setUTCFullYear(d.getUTCFullYear() + 1);
+    return d.toISOString().slice(0, 10);
   }
   // The server counts the note in bytes (UTF-8): Thai letters are 3 bytes each.
   const NOTE_MAX_BYTES = 250;
@@ -1269,6 +1278,8 @@
     let time = $("fTime").value;
     if (/^\d{2}:\d{2}$/.test(time)) time += ":00";
     if (noteTooLong($("fNote").value)) { setFormError(NOTE_TOO_LONG); $("fNote").focus(); return; }
+    const day = $("fDate").value;
+    if (day && (day < "2000-01-01" || day > maxRecordDate())) { setFormError(DATE_RANGE_MSG); $("fDate").focus(); return; }
     if (t.isNew) return addRecord(sign, amount, time);
     const body = {
       id: t.id,

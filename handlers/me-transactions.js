@@ -5,7 +5,7 @@ const {
 } = require("../components/db");
 const { resolveWallet } = require("../components/services");
 const { lineAuth } = require("../components/lineAuth");
-const { parseAmount, isValidDateTime } = require("../components/utilities");
+const { parseAmount, isValidDateTime, dateRangeError } = require("../components/utilities");
 const { buildTxFilter, txOrder } = require("../components/txFilter");
 const { categorize, remember, disputeAi, describe, isValidFor, forgetIfUnused } = require("../components/categories");
 const oracledb = require("oracledb");
@@ -118,6 +118,7 @@ function readRecord({ exvalue, targetdate, detail, category }) {
     return { error: "Field 'exvalue' must be a non-zero number with at most 2 decimals and below 10,000,000 (e.g. -120, +1,500.50)." };
   }
   if (!isValidDateTime(targetdate)) return { error: "Field 'targetdate' must be a valid 'YYYY-MM-DD HH:MM:SS'." };
+  if (dateRangeError(targetdate)) return { error: dateRangeError(targetdate) };
   const note = typeof detail === "string" ? detail.replace(/\s+/g, " ").trim() : "";
   if (!note) return { error: "Field 'detail' is required." };
   if (Buffer.byteLength(note, "utf8") > NOTE_MAX_BYTES) return { error: "Field 'detail' is too long." };
@@ -208,6 +209,7 @@ async function update(req, res, connection, uname) {
   if (!isValidDateTime(targetdate)) {
     return badRequest(res, "Field 'targetdate' must be a valid 'YYYY-MM-DD HH:MM:SS'.");
   }
+  if (dateRangeError(targetdate)) return badRequest(res, dateRangeError(targetdate));
   const note = typeof detail === "string" ? detail.replace(/\s+/g, " ").trim() : "";
   if (!note) {
     return badRequest(res, "Field 'detail' is required.");

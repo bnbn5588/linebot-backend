@@ -130,7 +130,10 @@ function extractTag(note, amount) {
     }
     return m;
   });
-  return { note: cleaned.replace(/\s+/g, " ").trim(), tagCategory };
+  let rest = cleaned.replace(/\s+/g, " ").trim();
+  // Only a tag ("-120 #food"): the category's name is the note
+  if (!rest && tagCategory) rest = BY_KEY.get(tagCategory).label;
+  return { note: rest, tagCategory };
 }
 
 // Thai has no spaces between words, so Thai keywords match anywhere in the
