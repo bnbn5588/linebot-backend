@@ -224,7 +224,8 @@ async function update(req, res, connection, uname) {
 
   const current = await executeQuery(
     connection,
-    "SELECT category, note FROM expense WHERE trans_id = :id AND uname = :uname",
+    `SELECT category, note, exvalue, TO_CHAR(fulldate, 'YYYY-MM'), wallet_id
+       FROM expense WHERE trans_id = :id AND uname = :uname`,
     { id: Number(id), uname }
   );
   if (!current.rows.length) {
@@ -264,9 +265,20 @@ async function update(req, res, connection, uname) {
   if (oldNote && oldNote.trim().toLowerCase() !== note.toLowerCase()) {
     await forgetIfUnused(connection, uname, oldNote);
   }
+  // Budget: what this edit added to the record's category in its month
+  // (the old amount counts only if it was already in that category + month).
+  const [oldCategory, , oldValue, oldMonth, walletId] = current.rows[0];
+  const before = oldValue < 0 && oldMonth === targetdate.slice(0, 7) &&
+    (oldCategory || "other_expense") === newCategory ? -oldValue : 0;
+  const budget = value < 0 ? await budgetAlert(connection, {
+    uname, walletId: Number(walletId), category: newCategory, date: targetdate.slice(0, 10), added: -value - before,
+  }) : null;
   return res.status(200).json({
     status: "success",
-    data: { id: Number(id), exvalue: value, datetime: targetdate, note, category: describe(newCategory, value) },
+    data: {
+      id: Number(id), exvalue: value, datetime: targetdate, note, category: describe(newCategory, value),
+      ...(budget ? { budget } : {}),
+    },
   });
 }
 

@@ -1286,15 +1286,22 @@
     }
     setBusy(true);
     try {
-      await api("me-transactions", { method: "PUT", body });
+      const r = await api("me-transactions", { method: "PUT", body });
       state.allNotes = null;
       closeEditor();
+      if (r && r.budget) showToast(`บันทึกแล้ว${budgetWarn(r.budget)}`);
       await loadAll();
       if ($("memoryCard").open) await loadMemory();
     } catch (e) {
       if (!(e instanceof AuthError)) setFormError(errText(e, "บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง"));
       setBusy(false);
     }
+  }
+
+  // " · ⚠️ อาหาร ใช้ไป 85% ของงบ" when a save crossed 80% / went over a budget
+  function budgetWarn(b) {
+    if (!b) return "";
+    return b.level === "over" ? ` · ⚠️ ${b.label} เกินงบแล้ว (${b.pct}%)` : ` · ⚠️ ${b.label} ใช้ไป ${b.pct}% ของงบ`;
   }
 
   async function addRecord(sign, amount, time) {
@@ -1312,11 +1319,7 @@
       closeEditor();
       const c = r.category;
       // one toast (two would stack on the same spot)
-      const b = r.budget;
-      const warn = !b ? "" : b.level === "over"
-        ? ` · ⚠️ ${b.label} เกินงบแล้ว (${b.pct}%)`
-        : ` · ⚠️ ${b.label} ใช้ไป ${b.pct}% ของงบ`;
-      showToast(`บันทึกแล้ว ${r.note} ${money(r.exvalue, true)} → ${c.icon} ${c.label}${c.ai_pending ? " (AI กำลังช่วยเดาหมวด)" : ""}${warn}`);
+      showToast(`บันทึกแล้ว ${r.note} ${money(r.exvalue, true)} → ${c.icon} ${c.label}${c.ai_pending ? " (AI กำลังช่วยเดาหมวด)" : ""}${budgetWarn(r.budget)}`);
       // show the month the record went into
       const ym = body.targetdate.slice(0, 7);
       if (ym !== state.month) {
