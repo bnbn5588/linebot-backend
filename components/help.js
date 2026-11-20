@@ -59,7 +59,7 @@ const HELP = {
           "สรุปรายสัปดาห์: ทุกวันจันทร์ 9 โมงเช้า (ต้องเปิดก่อน)",
           "เตือนจด: 3 ทุ่ม (เวลาไทย) ถ้าวันนี้ยังไม่ได้จดเลย (ต้องเปิดก่อน)",
         ],
-        note: "ปิดได้ด้วย ปิดสรุปรายเดือน / ปิดสรุปรายสัปดาห์ / ปิดเตือนจด",
+        note: "ปิดได้ด้วย ปิดสรุปรายเดือน / ปิดสรุปรายสัปดาห์ / ปิดเตือนจด (เปิดกลับ: เปิดสรุปรายเดือน)",
         buttons: [
           { label: "🗓️ เปิดสรุปสัปดาห์", text: "เปิดสรุปรายสัปดาห์" },
           { label: "📝 เปิดเตือนจด", text: "เปิดเตือนจด" },
@@ -131,7 +131,7 @@ const HELP = {
           "Weekly summary: Mondays 9:00 (turn it on first)",
           "Reminder: 21:00 (Thai time) if nothing was recorded today (turn it on first)",
         ],
-        note: "Turn off: summary off / weekly off / remind off",
+        note: "Turn off: summary off / weekly off / remind off (back on: summary on)",
         buttons: [
           { label: "🗓️ Weekly on", text: "weekly on" },
           { label: "📝 Reminder on", text: "remind on" },

@@ -13,7 +13,6 @@ const { push, row, small, change, fmtMoney, clip, CAT_EXPR } = require("./monthl
 const REMIND_PAUSE_AFTER = 7; // reminders in a row without a record, then pause
 const QUOTA_STOP = 0.9;
 const MAX_WALLETS = 5;
-const TH_DAYS = ["อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส."];
 const TH_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 
 const zoneOr = (tz) => (tz && moment.tz.zone(tz) ? tz : "Asia/Bangkok");
@@ -83,7 +82,11 @@ function remindMessage(streak) {
 async function sendReminders(connection, { only = null, dryRun = false, now = new Date() } = {}) {
   const out = { job: "remind", users: 0, sent: 0, recorded: 0, skipped: 0, paused: 0, failed: 0, stopped: null };
   if (!dryRun && !process.env.LB_KEY) return { ...out, stopped: "NO_LB_KEY" };
-  if (!dryRun && !(await quotaOk())) return { ...out, stopped: "QUOTA_90" };
+  if (!dryRun) {
+    const ok = await quotaOk().catch((e) => { console.error("quota check:", e.message); return null; });
+    if (ok === null) return { ...out, stopped: "QUOTA_CHECK_FAILED" };
+    if (!ok) return { ...out, stopped: "QUOTA_90" };
+  }
   const users = await executeQuery(
     connection,
     `SELECT u.uname, w.timezone, u.remind_last, u.remind_skip, u.remind_streak
@@ -94,9 +97,24 @@ async function sendReminders(connection, { only = null, dryRun = false, now = ne
   );
   out.users = users.rows.length;
   const messages = [];
-  for (const [uname, tz, last, skip, streak] of users.rows) {
+  for (const [uname, tz, last, skip, streak0] of users.rows) {
+    let streak = streak0;
     const today = moment.tz(now, zoneOr(tz)).format("YYYY-MM-DD");
     if (last === today || skip === today) { out.skipped++; continue; }
+    // A record dated on or after the last reminder day (e.g. typed at 21:30
+    // after the 21:00 reminder) means they answered it: start counting again.
+    if (streak > 0 && last) {
+      const since = await executeQuery(
+        connection,
+        `SELECT COUNT(*) FROM expense e JOIN wallet w ON w.uname = e.uname AND w.wallet_id = e.wallet_id AND w.deleted_at IS NULL
+          WHERE e.uname = :uname AND e.fulldate >= TO_DATE(:last, 'YYYY-MM-DD')`,
+        { uname, last }
+      );
+      if (since.rows[0][0] > 0) {
+        streak = 0;
+        if (!dryRun) await executeQuery(connection, "UPDATE users SET remind_streak = 0 WHERE uname = :uname", { uname });
+      }
+    }
     // any record dated today, in any of the user's active wallets
     const rec = await executeQuery(
       connection,
@@ -191,7 +209,7 @@ function weekBubble(x, w) {
   const vs = change(spent, before);
   const contents = [
     { type: "text", text: "🗓️ สรุปสัปดาห์ที่แล้ว", weight: "bold", size: "md", color: "#0b0b0b" },
-    { type: "text", text: `${TH_DAYS[1]} ${weekLabel(w)}`, size: "xs", color: "#52514e" },
+    { type: "text", text: weekLabel(w), size: "xs", color: "#52514e" },
     { type: "text", text: clip(`[${x.wallet_id}] ${x.wallet_name || ""}`.trim(), 40) + ` · ${x.count} รายการ`, size: "xs", color: "#52514e" },
     { type: "separator", margin: "md" },
     { type: "box", layout: "vertical", spacing: "xs", margin: "md", contents: [
@@ -201,7 +219,7 @@ function weekBubble(x, w) {
     ] },
     small(spent
       ? (vs ? `รายจ่ายเทียบสัปดาห์ก่อน (${fmtMoney(x.prev_expense)}): ${vs}` : "สัปดาห์ก่อนไม่มีรายจ่าย")
-      : "สัปดาห์นี้ไม่มีรายจ่าย"),
+      : "สัปดาห์ที่แล้วไม่มีรายจ่าย"),
   ];
   if (x.top.length) {
     contents.push({ type: "separator", margin: "md" });
@@ -241,7 +259,11 @@ async function sendWeeklySummaries(connection, { only = null, dryRun = false, fo
   const w = lastWeek(now);
   const out = { job: "weekly", week: w.start, users: 0, sent: 0, skipped_no_records: 0, failed: 0, stopped: null };
   if (!dryRun && !process.env.LB_KEY) return { ...out, stopped: "NO_LB_KEY" };
-  if (!dryRun && !(await quotaOk())) return { ...out, stopped: "QUOTA_90" };
+  if (!dryRun) {
+    const ok = await quotaOk().catch((e) => { console.error("quota check:", e.message); return null; });
+    if (ok === null) return { ...out, stopped: "QUOTA_CHECK_FAILED" };
+    if (!ok) return { ...out, stopped: "QUOTA_90" };
+  }
   const users = await executeQuery(
     connection,
     `SELECT uname FROM users WHERE weekly_on IS NOT NULL
