@@ -47,19 +47,13 @@ module.exports = async (req, res) => {
       // Establish a database connection
       connection = await getConnection();
 
-      // 1. Fetch the maximum wallet_id for the user
-      const sql_select_max_wallet =
-        "SELECT MAX(wallet_id) FROM wallet WHERE UNAME = :uname";
-      const data_max_wallet = { uname }; // Corrected data structure
-      const max_wallet_records = await executeQuery(
+      // 1. The wallet must exist (ids can have gaps once a wallet is deleted)
+      const target = await executeQuery(
         connection,
-        sql_select_max_wallet,
-        data_max_wallet
+        "SELECT 1 FROM wallet WHERE uname = :uname AND wallet_id = :wallet_id",
+        { uname, wallet_id: walletIdInt }
       );
-      const max_wallet_id = max_wallet_records.rows[0][0];
-
-      // 2. Validate the provided wallet_id
-      if (walletIdInt > max_wallet_id) {
+      if (!target.rows.length) {
         return res
           .status(400)
           .json({ status: "error", message: "Please input a valid wallet_id." });

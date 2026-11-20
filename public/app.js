@@ -208,13 +208,7 @@
     const linkMonth = /^\d{4}-(0[1-9]|1[0-2])$/.test(link.get("month") || "") ? link.get("month") : null;
     const saved = store.get("wallet_id");
     state.wallet = linkWallet || me.wallets.find((w) => String(w.wallet_id) === saved) || me.current_wallet;
-    const sel = $("walletSelect");
-    sel.replaceChildren(...me.wallets.map((w) => {
-      const o = el("option", "", `[${w.wallet_id}] ${w.wallet_name || "-"}`);
-      o.value = String(w.wallet_id);
-      return o;
-    }));
-    sel.value = String(state.wallet.wallet_id);
+    fillWalletSelect();
     state.month = linkMonth || currentMonth(state.wallet.timezone);
     $("monthInput").value = state.month;
 
@@ -1111,6 +1105,180 @@
     $("more").hidden = !state.hasMore;
   }
 
+  function fillWalletSelect() {
+    const sel = $("walletSelect");
+    sel.replaceChildren(...state.wallets.map((w) => {
+      const o = el("option", "", `[${w.wallet_id}] ${w.wallet_name || "-"}`);
+      o.value = String(w.wallet_id);
+      return o;
+    }));
+    sel.value = String(state.wallet.wallet_id);
+  }
+
+  // ---------- wallet manager (rename / delete)
+  const wm = $("walletMgr");
+  let wmData = null;
+  let wmOpenRow = null; // { id, mode: "rename" | "delete" }
+  async function openWalletMgr() {
+    wmOpenRow = null;
+    if (wm.showModal) wm.showModal(); else wm.setAttribute("open", "");
+    $("wmList").replaceChildren(el("li", "empty", "กำลังโหลด…"));
+    try {
+      wmData = await api("me-wallets");
+    } catch (e) {
+      if (!(e instanceof AuthError)) $("wmList").replaceChildren(el("li", "empty", "โหลดไม่สำเร็จ · " + errText(e, "ลองใหม่อีกครั้ง")));
+      return;
+    }
+    renderWalletMgr();
+  }
+  function closeWalletMgr() {
+    if (wm.close) wm.close(); else wm.removeAttribute("open");
+  }
+  const nameBytes = (n) => new TextEncoder().encode(n).length;
+  const cleanWalletName = (n) => n.replace(/\s+/g, " ").trim();
+  function renderWalletMgr() {
+    const only = wmData.length < 2;
+    $("wmList").replaceChildren(...wmData.map((w) => {
+      const li = el("li");
+      li.dataset.id = String(w.wallet_id);
+      const top = el("div", "wm-top");
+      const n = el("span", "n", `[${w.wallet_id}] ${w.wallet_name || "-"}`);
+      if (w.current) n.append(el("span", "badge", "ใช้ในแชท"));
+      if (w.wallet_id === state.wallet.wallet_id) n.append(el("span", "badge", "กำลังดู"));
+      top.append(n, el("span", "v", money(w.balance, true)),
+        el("span", "d", `${numFmt.format(w.records)} รายการ · ${w.timezone || "-"}`));
+      li.append(top);
+      const open = wmOpenRow && wmOpenRow.id === w.wallet_id ? wmOpenRow.mode : null;
+      if (!open) {
+        const btns = el("div", "wm-btns");
+        const rn = el("button", "btn", "เปลี่ยนชื่อ");
+        rn.type = "button";
+        rn.addEventListener("click", () => { wmOpenRow = { id: w.wallet_id, mode: "rename" }; renderWalletMgr(); focusWm(); });
+        const del = el("button", "btn danger", "ลบ");
+        del.type = "button";
+        if (only) { del.disabled = true; del.title = "ลบกระเป๋าเดียวที่มีไม่ได้"; }
+        del.addEventListener("click", () => { wmOpenRow = { id: w.wallet_id, mode: "delete" }; renderWalletMgr(); focusWm(); });
+        btns.append(rn, del);
+        li.append(btns);
+        if (only) li.append(el("p", "d muted", "ลบไม่ได้ เพราะเป็นกระเป๋าเดียวที่มี"));
+      } else {
+        li.append(open === "rename" ? renameForm(w) : deleteForm(w));
+      }
+      return li;
+    }));
+  }
+  function focusWm() {
+    const i = $("wmList").querySelector(".wm-form input");
+    if (i) { i.focus(); if (i.value) i.select(); }
+  }
+  function wmCancel() { wmOpenRow = null; renderWalletMgr(); }
+  function renameForm(w) {
+    const f = el("form", "wm-form");
+    const lab = el("label", "field", "ชื่อใหม่");
+    const inp = el("input");
+    inp.value = w.wallet_name || "";
+    inp.maxLength = 150;
+    inp.autocomplete = "off";
+    lab.append(inp);
+    const err = el("p", "form-error");
+    err.setAttribute("role", "alert");
+    err.hidden = true;
+    const btns = el("div", "wm-btns");
+    const ok = el("button", "btn primary", "บันทึกชื่อ");
+    ok.type = "submit";
+    const no = el("button", "btn ghost", "ยกเลิก");
+    no.type = "button";
+    no.addEventListener("click", wmCancel);
+    btns.append(ok, no);
+    f.append(lab, err, btns);
+    f.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const name = cleanWalletName(inp.value);
+      const fail = (m) => { err.textContent = m; err.hidden = false; };
+      if (!name) return fail("ใส่ชื่อกระเป๋าก่อน");
+      if (nameBytes(name) > 150) return fail("ชื่อยาวเกินไป (ภาษาไทยได้ราว 50 ตัวอักษร)");
+      if (name === w.wallet_name) return wmCancel();
+      ok.disabled = true;
+      try {
+        await api("me-wallets", { method: "PUT", body: { wallet_id: w.wallet_id, wallet_name: name } });
+      } catch (e2) {
+        ok.disabled = false;
+        if (!(e2 instanceof AuthError)) fail(errText(e2, "เปลี่ยนชื่อไม่สำเร็จ ลองใหม่อีกครั้ง"));
+        return;
+      }
+      w.wallet_name = name;
+      const sw = state.wallets.find((x) => x.wallet_id === w.wallet_id);
+      if (sw) sw.wallet_name = name;
+      if (state.wallet.wallet_id === w.wallet_id) state.wallet.wallet_name = name;
+      fillWalletSelect();
+      wmCancel();
+      showToast("เปลี่ยนชื่อแล้ว");
+    });
+    return f;
+  }
+  function deleteForm(w) {
+    const f = el("form", "wm-form");
+    f.append(el("p", "warn", w.records > 0
+      ? `รายการ ${numFmt.format(w.records)} รายการ และงบของกระเป๋านี้จะถูกลบถาวร กู้คืนไม่ได้`
+      : "กระเป๋านี้ยังไม่มีรายการ ลบแล้วกู้คืนไม่ได้"));
+    const lab = el("label", "field", `พิมพ์ชื่อกระเป๋า "${w.wallet_name || "-"}" เพื่อยืนยัน`);
+    const inp = el("input");
+    inp.autocomplete = "off";
+    lab.append(inp);
+    const err = el("p", "form-error");
+    err.setAttribute("role", "alert");
+    err.hidden = true;
+    const btns = el("div", "wm-btns");
+    const ok = el("button", "btn danger solid", "ลบถาวร");
+    ok.type = "submit";
+    ok.disabled = true;
+    const no = el("button", "btn ghost", "ยกเลิก");
+    no.type = "button";
+    no.addEventListener("click", wmCancel);
+    btns.append(ok, no);
+    f.append(lab, err, btns);
+    const matches = () => cleanWalletName(inp.value) === cleanWalletName(w.wallet_name || "");
+    inp.addEventListener("input", () => { ok.disabled = !matches(); err.hidden = true; });
+    f.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (!matches()) return;
+      ok.disabled = true;
+      ok.textContent = "กำลังลบ…";
+      let r;
+      try {
+        r = await api("me-wallets?" + q({ wallet_id: w.wallet_id, name: w.wallet_name || "" }), { method: "DELETE" });
+      } catch (e2) {
+        ok.disabled = false;
+        ok.textContent = "ลบถาวร";
+        if (e2 instanceof AuthError) return;
+        err.textContent = e2.status === 409 ? "ลบไม่ได้ เพราะเป็นกระเป๋าเดียวที่มี" : errText(e2, "ลบไม่สำเร็จ ลองใหม่อีกครั้ง");
+        err.hidden = false;
+        return;
+      }
+      wmData = wmData.filter((x) => x.wallet_id !== w.wallet_id);
+      if (r.current) for (const x of wmData) x.current = x.wallet_id === r.current.wallet_id;
+      state.wallets = state.wallets.filter((x) => x.wallet_id !== w.wallet_id);
+      const viewing = state.wallet.wallet_id === w.wallet_id;
+      if (viewing) {
+        state.wallet = state.wallets.find((x) => r.current && x.wallet_id === r.current.wallet_id) || state.wallets[0];
+        store.set("wallet_id", String(state.wallet.wallet_id));
+      }
+      fillWalletSelect();
+      wmOpenRow = null;
+      renderWalletMgr();
+      showToast(`ลบกระเป๋า ${w.wallet_name || "-"} แล้ว (${numFmt.format(r.records)} รายการ)`);
+      if (viewing) {
+        state.note = null;
+        state.allNotes = null;
+        showFilterChips();
+        state.month = currentMonth(state.wallet.timezone);
+        $("monthInput").value = state.month;
+        run(loadAll);
+      }
+    });
+    return f;
+  }
+
   // ---------- note picker (notes from every month)
   const picker = $("notePicker");
   const pickerType = () => (picker.querySelector("input[name=npType]:checked") || {}).value || "all";
@@ -1597,6 +1765,13 @@
       run(loadSummary);
     });
   }
+  $("walletManage").addEventListener("click", openWalletMgr);
+  $("wmClose").addEventListener("click", closeWalletMgr);
+  wm.addEventListener("click", (e) => {
+    if (e.target !== wm) return;
+    const r = wm.getBoundingClientRect();
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) closeWalletMgr();
+  });
   $("npClose").addEventListener("click", closeNotePicker);
   $("npFilter").addEventListener("input", renderNotePicker);
   for (const r of picker.querySelectorAll("input[name=npType]")) r.addEventListener("change", renderNotePicker);

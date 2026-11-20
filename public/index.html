@@ -21,6 +21,7 @@
               <span class="sr-only">กระเป๋าเงิน</span>
               <select id="walletSelect"></select>
             </label>
+            <button type="button" class="btn icon wallet-gear" id="walletManage" aria-label="จัดการกระเป๋า" aria-haspopup="dialog">⚙</button>
             <div class="wallet-total">คงเหลือทั้งหมด <span class="num" id="tAll">–</span></div>
           </div>
         </div>
@@ -200,6 +201,15 @@
       <input type="search" id="npFilter" placeholder="กรองรายการนี้…" autocomplete="off">
     </label>
     <ul class="picker-list" id="npList"></ul>
+  </dialog>
+
+  <dialog id="walletMgr" class="sheet picker" aria-labelledby="wmTitle">
+    <div class="picker-head">
+      <h2 id="wmTitle">จัดการกระเป๋า</h2>
+      <button type="button" class="btn ghost close" id="wmClose" aria-label="ปิด">✕</button>
+    </div>
+    <p class="muted wm-help">เปลี่ยนชื่อ หรือลบกระเป๋าที่ไม่ใช้แล้ว การลบจะลบรายการและงบของกระเป๋านั้นทั้งหมด กู้คืนไม่ได้</p>
+    <ul class="wm-list" id="wmList"></ul>
   </dialog>
 
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
