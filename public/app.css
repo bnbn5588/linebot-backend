@@ -304,6 +304,7 @@ html { scroll-padding-top: 64px; }
 /* a failed load: the message may wrap (it has a retry button, no undo) */
 .toast.err { width: calc(100% - 32px); max-width: 440px; }
 .toast.err span { white-space: normal; }
+.toast.err.above { bottom: calc(148px + env(safe-area-inset-bottom)); }
 /* budget: per-day pace (current month) */
 .budgets .d.pace { color: var(--text-secondary); }
 

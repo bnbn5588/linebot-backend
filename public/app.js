@@ -367,6 +367,8 @@
   function showErrorToast(msg, retry) {
     if (errToast) errToast.remove();
     const t = el("div", "toast undo err");
+    // an undo toast is up: sit above it so "เลิกทำ" stays reachable
+    if (document.querySelector(".toast.undo:not(.err)")) t.classList.add("above");
     t.setAttribute("role", "alert");
     const b = el("button", "", "ลองใหม่");
     b.type = "button";
@@ -1453,6 +1455,7 @@
   async function run(fn) {
     try {
       await fn();
+      if (errToast) { errToast.remove(); errToast = null; } // working again
     } catch (e) {
       if (e instanceof AuthError) return;
       console.error(e);

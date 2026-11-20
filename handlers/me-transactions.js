@@ -69,7 +69,7 @@ async function list(req, res, connection, uname) {
   // All months with a note or search: totals per month (first page only),
   // for the month headers and the "N รายการ ใน M เดือน" line.
   let byMonth;
-  if (!month && offset === 0 && ((note !== undefined && note !== "") || (q && q.trim()))) {
+  if (!month && offset === 0 && ((typeof note === "string" && note.trim()) || (q && q.trim()))) {
     const { offset: _o, fetch: _f, ...sumBinds } = binds;
     const m = await executeQuery(
       connection,
