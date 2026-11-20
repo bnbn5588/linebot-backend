@@ -99,7 +99,8 @@ function isValidDateTime(s) {
 // mistyped year such as 2062 or 1926). Returns null when fine, else the message.
 const MIN_RECORD_DATE = "2000-01-01";
 function maxRecordDate(now = new Date()) {
-  const d = new Date(now.getTime());
+  // +14 h: "today" in any timezone (the wallet's may be ahead of UTC)
+  const d = new Date(now.getTime() + 14 * 3600e3);
   d.setUTCFullYear(d.getUTCFullYear() + 1);
   return d.toISOString().slice(0, 10);
 }

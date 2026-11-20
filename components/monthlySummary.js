@@ -37,7 +37,12 @@ const fmtMoney = (v, signed = true) => {
   const s = Math.abs(n).toLocaleString("en-US", { maximumFractionDigits: 2 });
   return n < 0 ? "−" + s : (signed && n > 0 ? "+" : "") + s;
 };
-const clip = (t, n) => (String(t).length > n ? String(t).slice(0, n - 1) + "…" : String(t));
+// Counts code points, so an emoji is never cut in half (LINE refuses a flex
+// message with half an emoji in it)
+const clip = (t, n) => {
+  const c = Array.from(String(t));
+  return c.length > n ? c.slice(0, n - 1).join("") + "…" : c.join("");
+};
 
 // "▲ ใช้มากขึ้น 12%" for spending (both values are positive amounts spent)
 function change(now, before) {

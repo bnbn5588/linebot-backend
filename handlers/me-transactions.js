@@ -209,7 +209,6 @@ async function update(req, res, connection, uname) {
   if (!isValidDateTime(targetdate)) {
     return badRequest(res, "Field 'targetdate' must be a valid 'YYYY-MM-DD HH:MM:SS'.");
   }
-  if (dateRangeError(targetdate)) return badRequest(res, dateRangeError(targetdate));
   const note = typeof detail === "string" ? detail.replace(/\s+/g, " ").trim() : "";
   if (!note) {
     return badRequest(res, "Field 'detail' is required.");
@@ -226,12 +225,17 @@ async function update(req, res, connection, uname) {
 
   const current = await executeQuery(
     connection,
-    `SELECT category, note, exvalue, TO_CHAR(fulldate, 'YYYY-MM'), wallet_id
+    `SELECT category, note, exvalue, TO_CHAR(fulldate, 'YYYY-MM'), wallet_id, TO_CHAR(fulldate, 'YYYY-MM-DD')
        FROM expense WHERE trans_id = :id AND uname = :uname`,
     { id: Number(id), uname }
   );
   if (!current.rows.length) {
     return res.status(404).json({ status: "error", message: "Record not found" });
+  }
+  // An old record outside the range can still be edited as long as its date
+  // is left as it is.
+  if (targetdate.slice(0, 10) !== current.rows[0][5] && dateRangeError(targetdate)) {
+    return badRequest(res, dateRangeError(targetdate));
   }
 
   // Category: the one chosen in the form (and remember it for this note);

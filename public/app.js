@@ -230,7 +230,6 @@
       document.querySelector("input[name=catRange][value='12']").checked = true;
     }
 
-    $("fDate").max = maxRecordDate();
     $("status").hidden = true;
     $("view").hidden = false;
     await loadAll();
@@ -362,7 +361,7 @@
   // Records may be dated 2000-01-01 .. one year after today (the server checks too)
   const DATE_RANGE_MSG = "วันที่ต้องอยู่ระหว่างปี 2000 ถึงไม่เกิน 1 ปีจากวันนี้ (พิมพ์ปีผิดหรือเปล่า?)";
   function maxRecordDate() {
-    const d = new Date();
+    const d = new Date(Date.now() + 14 * 3600e3); // same as the server
     d.setUTCFullYear(d.getUTCFullYear() + 1);
     return d.toISOString().slice(0, 10);
   }
@@ -1279,7 +1278,8 @@
     if (/^\d{2}:\d{2}$/.test(time)) time += ":00";
     if (noteTooLong($("fNote").value)) { setFormError(NOTE_TOO_LONG); $("fNote").focus(); return; }
     const day = $("fDate").value;
-    if (day && (day < "2000-01-01" || day > maxRecordDate())) { setFormError(DATE_RANGE_MSG); $("fDate").focus(); return; }
+    const sameDay = !t.isNew && String(t.datetime || "").slice(0, 10) === day; // old record, date untouched
+    if (day && !sameDay && (day < "2000-01-01" || day > maxRecordDate())) { setFormError(DATE_RANGE_MSG); $("fDate").focus(); return; }
     if (t.isNew) return addRecord(sign, amount, time);
     const body = {
       id: t.id,
