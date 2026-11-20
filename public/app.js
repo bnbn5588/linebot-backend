@@ -1166,7 +1166,7 @@
       for (const w of wmData.trash) {
         const li = el("li", "trashed");
         li.dataset.trash = String(w.wallet_id);
-        li.append(walletTop(w, `เหลือ ${w.days_left} วัน`));
+        li.append(walletTop(w, w.days_left > 0 ? `เหลือ ${w.days_left} วัน` : "จะลบถาวรคืนนี้"));
         const btns = el("div", "wm-btns");
         const rs = el("button", "btn", "♻️ กู้คืน");
         rs.type = "button";

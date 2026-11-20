@@ -24,7 +24,7 @@ function cleanName(name) {
 
 // Every wallet with its record count and balance, which one is current, and
 // for trashed ones the day they will be purged (YYYY-MM-DD, UTC) and days left.
-async function walletStats(connection, uname) {
+async function walletStats(connection, uname, opts = {}) {
   const r = await executeQuery(
     connection,
     `SELECT w.wallet_id, w.wallet_name, w.timezone,
@@ -36,7 +36,8 @@ async function walletStats(connection, uname) {
        FROM wallet w LEFT JOIN users u ON u.uname = w.uname
       WHERE w.uname = :uname
       ORDER BY w.wallet_id`,
-    { uname }
+    { uname },
+    opts
   );
   const all = r.rows.map(([wallet_id, wallet_name, timezone, records, balance, cur, purge_on, days_left]) => ({
     wallet_id, wallet_name, timezone, records, balance, current: cur === 1,
@@ -64,41 +65,42 @@ async function renameWallet(connection, uname, walletId, name) {
 // "NAME_MISMATCH" } or the result. `expectName` (optional) must equal the
 // wallet's current name, so a stale chat button never trashes another wallet.
 async function trashWallet(connection, uname, walletId, expectName) {
-  const { wallets } = await walletStats(connection, uname);
-  const target = wallets.find((w) => w.wallet_id === walletId);
-  if (!target) return { error: "NOT_FOUND" };
-  if (expectName !== undefined && expectName !== null && cleanName(expectName) !== cleanName(target.wallet_name || "")) {
-    return { error: "NAME_MISMATCH" };
-  }
-  if (wallets.length < 2) return { error: "LAST_WALLET" };
-  const next = target.current ? wallets.find((w) => w.wallet_id !== walletId) : wallets.find((w) => w.current);
   const opts = { autoCommit: false };
   try {
-    const u = await executeQuery(
+    // Lock this user's wallet rows first: two deletes at once (separate
+    // lambdas) run one after the other, so they can never trash the last
+    // wallet or leave USERS pointing at a trashed one.
+    await executeQuery(connection, "SELECT wallet_id FROM wallet WHERE uname = :uname FOR UPDATE", { uname }, opts);
+    const { wallets } = await walletStats(connection, uname, opts);
+    const target = wallets.find((w) => w.wallet_id === walletId);
+    const stop = async (error) => { await connection.rollback(); return { error }; };
+    if (!target) return await stop("NOT_FOUND");
+    if (expectName !== undefined && expectName !== null && cleanName(expectName) !== cleanName(target.wallet_name || "")) {
+      return await stop("NAME_MISMATCH");
+    }
+    if (wallets.length < 2) return await stop("LAST_WALLET");
+    const next = target.current ? wallets.find((w) => w.wallet_id !== walletId) : wallets.find((w) => w.current);
+    await executeQuery(
       connection,
       "UPDATE wallet SET deleted_at = SYSDATE WHERE uname = :uname AND wallet_id = :wallet_id AND deleted_at IS NULL",
       { uname, wallet_id: walletId },
       opts
     );
-    if (!u.rowsAffected) {
-      await connection.rollback();
-      return { error: "NOT_FOUND" }; // trashed by a second request just now
-    }
     if (target.current) {
       await executeQuery(connection, "UPDATE users SET wallet_id = :wallet_id WHERE uname = :uname", { wallet_id: next.wallet_id, uname }, opts);
     }
     await connection.commit();
+    return {
+      wallet_id: walletId,
+      wallet_name: target.wallet_name,
+      records: target.records,
+      trash_days: TRASH_DAYS,
+      current: next ? { wallet_id: next.wallet_id, wallet_name: next.wallet_name, timezone: next.timezone } : null,
+    };
   } catch (e) {
     try { await connection.rollback(); } catch { /* ignore */ }
     throw e;
   }
-  return {
-    wallet_id: walletId,
-    wallet_name: target.wallet_name,
-    records: target.records,
-    trash_days: TRASH_DAYS,
-    current: next ? { wallet_id: next.wallet_id, wallet_name: next.wallet_name, timezone: next.timezone } : null,
-  };
 }
 
 // Takes a wallet out of the trash. null when it is not in the trash.
