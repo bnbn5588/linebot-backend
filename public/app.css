@@ -301,6 +301,9 @@ html { scroll-padding-top: 64px; }
   flex: none; font: inherit; font-weight: 700; min-height: 36px; padding: 6px 12px; cursor: pointer;
   background: transparent; color: var(--bg); border: 1px solid currentColor; border-radius: 8px;
 }
+/* a failed load: the message may wrap (it has a retry button, no undo) */
+.toast.err { width: calc(100% - 32px); max-width: 440px; }
+.toast.err span { white-space: normal; }
 /* budget: per-day pace (current month) */
 .budgets .d.pace { color: var(--text-secondary); }
 

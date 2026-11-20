@@ -226,7 +226,7 @@ module.exports = async (req, res) => {
       // With a category and/or note picked: the same per-month rows for those
       // records only (chart + month table follow the filter).
       let filterMonths = null;
-      if (category || note) {
+      if (category || noteKey) {
         filterMonths = await executeQuery(
           connection,
           `SELECT TO_CHAR(fulldate, 'YYYY-MM'),
@@ -238,7 +238,7 @@ module.exports = async (req, res) => {
             WHERE uname = :uname AND wallet_id = :wallet_id${categoryFilter}${noteFilter}
             GROUP BY TO_CHAR(fulldate, 'YYYY-MM')
             ORDER BY 1`,
-          { ...binds, ...(category ? { category } : {}), ...(note ? { note_key: noteKey } : {}) }
+          { ...binds, ...(category ? { category } : {}), ...(noteKey ? { note_key: noteKey } : {}) }
         );
       }
       const monthRows = (r) => r.rows.map((x) => ({ month: x[0], income: x[1], expense: x[2], balance: x[3], count: x[4] }));
@@ -281,7 +281,7 @@ module.exports = async (req, res) => {
           compare,
           // range=12 only: { from, to, months, by_category [{ ...category, total, count, avg_total }] }
           range12,
-          note: note ? noteKey : null,
+          note: noteKey || null,
           // per-month rows for the picked category and/or note (same shape as months)
           filter_months: filterMonths ? monthRows(filterMonths) : null,
           category_months: filterMonths ? monthRows(filterMonths) : null, // old name, for pages still open

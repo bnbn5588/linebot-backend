@@ -224,7 +224,7 @@ async function update(req, res, connection, uname) {
 
   const current = await executeQuery(
     connection,
-    "SELECT category FROM expense WHERE trans_id = :id AND uname = :uname",
+    "SELECT category, note FROM expense WHERE trans_id = :id AND uname = :uname",
     { id: Number(id), uname }
   );
   if (!current.rows.length) {
@@ -257,6 +257,12 @@ async function update(req, res, connection, uname) {
   );
   if (!result.rowsAffected) {
     return res.status(404).json({ status: "error", message: "Record not found" });
+  }
+  // The note changed: forget the old note's category if no record uses it now
+  // (same as delete), so the memory card does not list it with 0 records.
+  const oldNote = current.rows[0][1];
+  if (oldNote && oldNote.trim().toLowerCase() !== note.toLowerCase()) {
+    await forgetIfUnused(connection, uname, oldNote);
   }
   return res.status(200).json({
     status: "success",

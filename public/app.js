@@ -19,6 +19,7 @@
 
   const state = {
     token: null,
+    ready: false, // first load done (run() keeps the page on later errors)
     wallets: [],
     wallet: null,
     month: null,
@@ -232,6 +233,7 @@
     $("status").hidden = true;
     $("view").hidden = false;
     await loadAll();
+    state.ready = true; // from now on a failed load keeps the page (see run)
     await openFromLink();
   }
 
@@ -262,7 +264,7 @@
       type: state.type === "all" ? "" : state.type,
       category: state.category ? state.category.key : "",
       note: state.note ? state.note.key : "",
-      q: state.q.trim(),
+      q: state.q.trim().slice(0, 100), // the server refuses longer
       sort: state.txSort,
     };
   }
@@ -293,7 +295,7 @@
             showToast("กำลังเปิดไฟล์ในเบราว์เซอร์ของเครื่อง");
           }
         } catch (e) {
-          if (!(e instanceof AuthError)) showToast(e.status === 413 && e.message ? e.message : "ส่งออกไม่สำเร็จ ลองใหม่อีกครั้ง");
+          if (!(e instanceof AuthError)) showToast(e.status === 413 && e.message ? e.message : "ส่งออกไม่สำเร็จ: " + errText(e));
         }
         return;
       }
@@ -339,6 +341,42 @@
     setTimeout(() => t.remove(), 3500);
   }
 
+  // A Thai message for a failed request (the API's own messages are English).
+  function errText(e, fallback) {
+    const m = (e && e.message) || "";
+    if (e instanceof TypeError || /failed to fetch|networkerror|load failed|network request failed/i.test(m)) {
+      return "เชื่อมต่อไม่ได้ ตรวจสอบอินเทอร์เน็ต";
+    }
+    if (/^Field 'exvalue'/.test(m)) return "จำนวนเงินไม่ถูกต้อง ใส่ตัวเลขไม่เกิน 2 ตำแหน่งทศนิยม และน้อยกว่า 10,000,000";
+    if (/^Field 'targetdate'/.test(m)) return "วันที่หรือเวลาไม่ถูกต้อง";
+    if (/^Field 'detail' is required/.test(m)) return "ใส่โน้ตก่อน";
+    if (/^Field 'detail' is too long/.test(m)) return NOTE_TOO_LONG;
+    if (/^Field 'category'/.test(m)) return "หมวดนี้ใช้กับรายการประเภทนี้ไม่ได้";
+    if (/too long/.test(m)) return "ข้อความยาวเกินไป";
+    if (e && e.status === 404) return "ไม่พบข้อมูลนี้แล้ว อาจถูกลบไปแล้ว";
+    if (e && e.status >= 500) return "ระบบขัดข้องชั่วคราว";
+    return fallback || "ทำรายการไม่สำเร็จ ลองใหม่อีกครั้ง";
+  }
+  // The server counts the note in bytes (UTF-8): Thai letters are 3 bytes each.
+  const NOTE_MAX_BYTES = 250;
+  const NOTE_TOO_LONG = "โน้ตยาวเกินไป (ภาษาไทยได้ราว 80 ตัวอักษร)";
+  const noteTooLong = (note) => new TextEncoder().encode(note.replace(/\s+/g, " ").trim()).length > NOTE_MAX_BYTES;
+
+  // A failed load after the page is up: keep the page, say so, offer a retry.
+  let errToast = null;
+  function showErrorToast(msg, retry) {
+    if (errToast) errToast.remove();
+    const t = el("div", "toast undo err");
+    t.setAttribute("role", "alert");
+    const b = el("button", "", "ลองใหม่");
+    b.type = "button";
+    b.addEventListener("click", () => { t.remove(); retry(); });
+    t.append(el("span", "", msg), b);
+    document.body.append(t);
+    errToast = t;
+    setTimeout(() => { t.remove(); if (errToast === t) errToast = null; }, 8000);
+  }
+
   async function loadAll() {
     await flushDelete();
     updateMonthNav();
@@ -374,7 +412,7 @@
       list.replaceChildren(el("li", "empty", "ยังไม่ได้ตั้งงบ เลือกหมวดด้านล่างแล้วใส่จำนวน"));
     } else {
       list.replaceChildren(...items.map((b) => {
-        const level = b.spent > b.amount ? "over" : b.pct >= 80 ? "near" : "ok";
+        const level = b.spent > b.amount ? "over" : b.spent >= b.amount * 0.8 ? "near" : "ok";
         const li = el("li");
         const btn = el("button");
         btn.type = "button";
@@ -386,7 +424,7 @@
         track.append(fill);
         const line = level === "over"
           ? `⚠️ เกินงบ ${money(b.spent - b.amount)} (${b.pct}%)`
-          : `${level === "near" ? "⚠️ " : ""}ใช้ไป ${b.pct}% · เหลือ ${money(b.amount - b.spent)}`;
+          : `${level === "near" ? "⚠️ " : ""}ใช้ไป ${level === "ok" ? Math.floor((b.spent / b.amount) * 100) : b.pct}% · เหลือ ${money(b.amount - b.spent)}`;
         btn.append(el("span", "n", `${b.icon} ${b.label}`), v, track, el("span", "d " + level, line));
         const pace = paceLine(b);
         if (pace) btn.append(el("span", "d pace", pace));
@@ -454,7 +492,7 @@
       state.budgetOpen = false; // done: fold the form again
       await loadBudgets();
     } catch (e) {
-      if (!(e instanceof AuthError)) showToast("บันทึกงบไม่สำเร็จ: " + e.message);
+      if (!(e instanceof AuthError)) showToast("บันทึกงบไม่สำเร็จ: " + errText(e));
     } finally {
       for (const id of ["bSave", "bRemove"]) $(id).disabled = false;
     }
@@ -494,7 +532,14 @@
     try {
       await loadSummaryData(latest);
     } catch (e) {
-      if (latest()) throw e; // an old request failing does not matter any more
+      if (!latest()) return; // an old request failing does not matter any more
+      // do not leave the last month's / wallet's numbers under the new label
+      if (!(e instanceof AuthError)) {
+        for (const id of ["tBalance", "tIncome", "tExpense"]) $(id).textContent = "–";
+        for (const id of ["tIncomeCmp", "tExpenseCmp"]) $(id).hidden = true;
+        for (const id of ["cats", "notes"]) $(id).replaceChildren(el("li", "empty", "โหลดไม่สำเร็จ"));
+      }
+      throw e;
     } finally {
       done();
     }
@@ -903,7 +948,7 @@
           showToast(/^other_/.test(sel.value) ? `ลืม "${m.note_key}" แล้ว` : `"${m.note_key}" → ${sel.options[sel.selectedIndex].text}`);
           await loadMemory();
         } catch (e) {
-          if (!(e instanceof AuthError)) showToast("บันทึกไม่สำเร็จ: " + e.message);
+          if (!(e instanceof AuthError)) showToast("บันทึกไม่สำเร็จ: " + errText(e));
           sel.disabled = false;
         }
       });
@@ -917,7 +962,7 @@
           await api("me-memory?" + q({ note_key: m.note_key }), { method: "DELETE" });
           await loadMemory();
         } catch (e) {
-          if (!(e instanceof AuthError)) showToast("ลบไม่สำเร็จ: " + e.message);
+          if (!(e instanceof AuthError)) showToast("ลบไม่สำเร็จ: " + errText(e));
           del.disabled = false;
         }
       });
@@ -951,6 +996,13 @@
     let data;
     try {
       data = await loadTxPage(allMonths);
+    } catch (e) {
+      if (reset && seq === state.txSeq && !(e instanceof AuthError)) {
+        $("txSummary").hidden = true;
+        $("more").hidden = true;
+        list.replaceChildren(el("li", "empty", "โหลดรายการไม่สำเร็จ"));
+      }
+      throw e;
     } finally {
       clearTimeout(skel);
       if (seq === state.txSeq) {
@@ -973,7 +1025,7 @@
     return api("me-transactions?" + q({
       wallet_id: state.wallet.wallet_id,
       month: allMonths ? "" : state.month,
-      q: state.q.trim(),
+      q: state.q.trim().slice(0, 100), // the server refuses longer
       sort: state.txSort,
       type: state.type,
       category: state.category ? state.category.key : "",
@@ -1214,6 +1266,7 @@
     const amount = $("fAmount").value.trim().replace(/^[+-]/, "");
     let time = $("fTime").value;
     if (/^\d{2}:\d{2}$/.test(time)) time += ":00";
+    if (noteTooLong($("fNote").value)) { setFormError(NOTE_TOO_LONG); $("fNote").focus(); return; }
     if (t.isNew) return addRecord(sign, amount, time);
     const body = {
       id: t.id,
@@ -1237,7 +1290,7 @@
       await loadAll();
       if ($("memoryCard").open) await loadMemory();
     } catch (e) {
-      if (!(e instanceof AuthError)) setFormError(e.message);
+      if (!(e instanceof AuthError)) setFormError(errText(e, "บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง"));
       setBusy(false);
     }
   }
@@ -1271,7 +1324,7 @@
       await loadAll();
       if ($("memoryCard").open) await loadMemory();
     } catch (e) {
-      if (!(e instanceof AuthError)) setFormError(e.message);
+      if (!(e instanceof AuthError)) setFormError(errText(e, "บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง"));
       setBusy(false);
     }
   }
@@ -1328,7 +1381,7 @@
       state.allNotes = null;
     } catch (e) {
       if (e instanceof AuthError) return;
-      if (e.status !== 404) showToast("ลบไม่สำเร็จ: " + e.message);
+      if (e.status !== 404) showToast("ลบไม่สำเร็จ: " + errText(e));
     }
     await run(async () => {
       await loadAll();
@@ -1344,7 +1397,7 @@
     p.toast.remove();
     state.allNotes = null;
     return api("me-transactions?" + q({ id: p.t.id }), { method: "DELETE" }).catch((e) => {
-      if (!(e instanceof AuthError) && e.status !== 404) showToast("ลบไม่สำเร็จ: " + e.message);
+      if (!(e instanceof AuthError) && e.status !== 404) showToast("ลบไม่สำเร็จ: " + errText(e));
     });
   }
   // closing LIFF / switching app: the request must outlive the page
@@ -1403,7 +1456,9 @@
     } catch (e) {
       if (e instanceof AuthError) return;
       console.error(e);
-      showStatus("เกิดข้อผิดพลาด: " + e.message, true);
+      // first load: nothing on screen to keep, so the whole-page message
+      if (!state.ready) return showStatus("โหลดข้อมูลไม่สำเร็จ · " + errText(e, "ลองใหม่อีกครั้ง"), true);
+      showErrorToast("โหลดไม่สำเร็จ · " + errText(e, "ลองใหม่อีกครั้ง"), () => run(fn));
     }
   }
 

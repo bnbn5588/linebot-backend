@@ -35,8 +35,10 @@ function buildTxFilter({ month, type, category, note, q } = {}) {
   if (note !== undefined && note !== null && note !== "") {
     // exact note, the same key as me-summary's by-note list (lower-case, trimmed)
     if (typeof note !== "string" || note.length > 500) return { error: "Parameter 'note' is too long." };
-    sql += " AND lower(trim(note)) = :note_key";
-    binds.note_key = note.trim().toLowerCase();
+    if (note.trim()) { // only spaces = no note picked (same as me-summary)
+      sql += " AND lower(trim(note)) = :note_key";
+      binds.note_key = note.trim().toLowerCase();
+    }
   }
   if (q !== undefined && q !== null && q !== "") {
     if (typeof q !== "string" || q.length > 100) return { error: "Parameter 'q' is too long." };

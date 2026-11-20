@@ -35,7 +35,7 @@ const CATEGORIES = [
     keywords: ["กาแฟ", "ชา", "ชานม", "ชาไข่มุก", "ชาไทย", "น้ำ", "นม", "โกโก้", "เบียร์", "เหล้า", "ไวน์", "สมูทตี้", "น้ำปั่น", "โค้ก", "奶茶", "豆漿", "咖啡", "茶",
       "coffee", "cafe", "café", "latte", "americano", "espresso", "cappuccino", "mocha", "arabica", "tea", "milk tea", "cha thai", "matcha", "milk", "soymilk", "boba", "drink", "drinks", "beer", "wine", "alcohol", "starbucks", "starbuck", "amazon", "cafe amazon", "louisa", "smoothie", "smoothies", "juice", "frappe", "water", "coke", "coke zero", "pepsi", "sprite", "soda", "ovaltine", "sidra", "soy milk", "soy milks", "cocoa", "black tea", "oolong", "coffe", "milktea", "chagee", "chunshui tang", "comebuy", "可樂", "一瓶水", "礦泉水", "guava drink", "guava juice", "50lan", "50嵐", "guiji", "可可"] },
   { key: "transport", kind: "expense", label: "เดินทาง", icon: "🚗", aliases: ["transport", "travel", "เดินทาง", "รถ"],
-    keywords: ["รถ", "แท็กซี่", "วิน", "มอไซค์", "รถไฟ", "รถเมล์", "เรือ", "ทางด่วน", "น้ำมัน", "เติมน้ำมัน", "ที่จอดรถ", "จอดรถ", "ค่าทาง", "ตั๋ว", "เครื่องบิน", "บีทีเอส", "เอ็มอาร์ที", "悠遊卡",
+    keywords: ["รถ", "แท็กซี่", "วิน", "มอไซค์", "รถไฟ", "รถเมล์", "เรือ", "ทางด่วน", "น้ำมัน", "เติมน้ำมัน", "ค่าน้ำมัน", "ยาง", "ยางรถ", "ปะยาง", "เปลี่ยนยาง", "ชาร์จรถ", "ที่จอดรถ", "จอดรถ", "ค่าทาง", "ตั๋ว", "เครื่องบิน", "บีทีเอส", "เอ็มอาร์ที", "悠遊卡",
       "grab", "bolt", "taxi", "uber", "bts", "mrt", "arl", "bus", "train", "ferry", "toll", "gas", "fuel", "petrol", "parking", "flight", "airasia", "ticket", "muvmi", "youbike",
       "easy card", "easycard", "student card", "rabbit card", "hsr", "hrs to", "fare", "boat bike", "wulai cart", "coin locker", "car park"],
     places: ["top up", "topup"] },
@@ -44,7 +44,7 @@ const CATEGORIES = [
       "shopee", "lazada", "amazon.com", "uniqlo", "h&m", "zara", "shirt", "shoes", "bag", "gift", "clothes", "jacket", "jackets", "shopping", "shoping", "airpods", "hair dryer", "skin care", "skincare", "nivea", "nivia", "lotion", "decathlon", "present", "souvenir", "graduation gown", "shorts", "pants", "shirts", "long sleeves", "ear rings", "earrings", "shopp", "nevia", "aloe vera", "eyebrow", "eyebrow pencil", "delivery fee", "delivery box", "parcel", "parcels", "shipping", "badminton shoes", "kuang nan", "kuangnan"],
     places: ["ikea", "central", "robinson", "outlet", "mall"] },
   { key: "housing", kind: "expense", label: "ที่พัก/ค่าน้ำไฟ", icon: "🏠", aliases: ["housing", "bills", "ที่พัก", "บ้าน", "ค่าห้อง"],
-    keywords: ["ค่าห้อง", "ค่าเช่า", "เช่าห้อง", "ค่าบ้าน", "ผ่อนบ้าน", "คอนโด", "ค่าน้ำ", "ค่าไฟ", "ค่าเน็ต", "อินเทอร์เน็ต", "เน็ตบ้าน", "ค่าโทรศัพท์", "ค่าส่วนกลาง", "ค่าโทร",
+    keywords: ["ค่าห้อง", "ค่าเช่า", "เช่าห้อง", "ค่าบ้าน", "ผ่อนบ้าน", "คอนโด", "ค่าน้ำ", "ค่าไฟ", "ค่าเน็ต", "อินเทอร์เน็ต", "เน็ตบ้าน", "ค่าโทรศัพท์", "ค่าส่วนกลาง", "ค่าโทร", "เติมเงิน", "เติมเงินมือถือ", "เติมเงินโทรศัพท์",
       "rent", "electric", "electricity", "water bill", "internet", "wifi", "ais", "true", "dtac", "3bb", "condo", "mortgage", "utility", "utilities", "dorm", "dormitory", "ac fee", "air con", "aircon", "mattress", "sim card", "chunghwa", "chunghua", "telecom", "monthly fee", "telephone bill", "phone bill", "ture", "chung hua", "chunghwa telecom"] },
   { key: "health", kind: "expense", label: "สุขภาพ", icon: "💊", aliases: ["health", "สุขภาพ", "หมอ"],
     keywords: ["ยา", "หมอ", "โรงพยาบาล", "คลินิก", "ทำฟัน", "หมอฟัน", "ตรวจสุขภาพ", "ฟิตเนส", "ยิม", "นวด", "ประกันสุขภาพ", "วิตามิน", "ตัดผม",
@@ -53,10 +53,10 @@ const CATEGORIES = [
     keywords: ["หนัง", "ดูหนัง", "คอนเสิร์ต", "เกม", "เที่ยว", "ปาร์ตี้", "คาราโอเกะ", "สมาชิก", "หวย", "ลอตเตอรี่",
       "movie", "cinema", "netflix", "spotify", "youtube", "disney", "game", "steam", "concert", "party", "karaoke", "major", "sf cinema", "trip", "hotel", "agoda", "booking", "night club", "nightclub", "museum", "club", "pub", "lottery", "entrance fee", "ticket to", "movies", "badminton", "tennis", "tennis court", "racket", "e7play", "eplay", "zoo", "gondola", "park", "livebox"] },
   { key: "education", kind: "expense", label: "การศึกษา", icon: "📚", aliases: ["education", "study", "การศึกษา", "เรียน"],
-    keywords: ["หนังสือ", "เรียน", "คอร์ส", "ค่าเทอม", "ติว", "สอบ", "เครื่องเขียน", "ปริ้น", "พิมพ์งาน",
+    keywords: ["หนังสือ", "เรียน", "คอร์ส", "ค่าเทอม", "ติว", "สอบ", "เครื่องเขียน", "ปริ้น", "พิมพ์งาน", "ยางลบ",
       "book", "course", "tuition", "class", "udemy", "coursera", "exam", "stationery", "printing", "print", "printed", "turnitin", "midterm", "registration"] },
   { key: "household", kind: "expense", label: "ของใช้ในบ้าน", icon: "🧴", aliases: ["household", "ของใช้", "grocery"],
-    keywords: ["ของใช้", "สบู่", "แชมพู", "ยาสีฟัน", "ผงซักฟอก", "ทิชชู่", "กระดาษชำระ", "ซักผ้า", "น้ำยาปรับผ้านุ่ม", "ร่ม",
+    keywords: ["ของใช้", "สบู่", "แชมพู", "ยาสีฟัน", "ผงซักฟอก", "ทิชชู่", "กระดาษชำระ", "ซักผ้า", "น้ำยาปรับผ้านุ่ม", "ร่ม", "น้ำมันพืช", "น้ำมันหอย", "น้ำตาล", "ค่าน้ำตาล",
       "grocery", "groceries", "laundry", "landry", "tissue", "tissues", "detergent", "softener", "shampoo", "soap", "toothpaste", "washing", "umbrella", "pillow", "desiccant", "shower cream", "clipper", "stuff", "stuffs", "dry clothes", "luandry", "ethanol", "wet wipe", "wet wipes"],
     places: ["ร้านสะดวกซื้อ", "ซุปเปอร์", "ตลาด", "全聯", "全联", "萊爾富", "全家",
       "7-11", "7-eleven", "seven", "711", "lotus", "big c", "bigc", "tops", "makro", "family mart", "familymart", "familiymart", "lawson", "villa", "gourmet", "supermarket",
@@ -146,9 +146,23 @@ const toMatcher = (k) => {
     len: w.length,
     test: re
       ? (t) => { const m = re.exec(t); return m ? m.index + m[1].length : -1; }
-      : (t) => t.indexOf(w),
+      : (t) => thaiIndex(t, w),
   };
 };
+// A Thai keyword must not start or end in the middle of a syllable: "นม" is
+// not in "เงินมือ" (a vowel mark follows), "ชา" is not in "ชาร์จ" (the next
+// letter is silent), "ยา" is not in "เยาว์" (a leading vowel comes before).
+const THAI_MARK = /[\u0e31\u0e34-\u0e3a\u0e47-\u0e4e]/;
+const THAI_LEAD = /[\u0e40-\u0e44]/;
+function thaiIndex(t, w) {
+  for (let i = t.indexOf(w); i >= 0; i = t.indexOf(w, i + 1)) {
+    const after = t[i + w.length] || "", after2 = t[i + w.length + 1] || "";
+    if (THAI_MARK.test(after) || after2 === "\u0e4c") continue;
+    if (i > 0 && THAI_LEAD.test(t[i - 1])) continue;
+    return i;
+  }
+  return -1;
+}
 const MATCHERS = CATEGORIES.map((c) => ({
   key: c.key,
   kind: c.kind,
