@@ -308,6 +308,7 @@ html { scroll-padding-top: 64px; }
 .toast.err.above { bottom: calc(148px + env(safe-area-inset-bottom)); }
 /* budget: per-day pace (current month) */
 .budgets .d.pace { color: var(--text-secondary); }
+.budgets .d.pace.fast { color: var(--warn, #b86e00); font-weight: 600; }
 
 /* loading: grey bars instead of old numbers, card contents fade under a moving line */
 @keyframes sk-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }

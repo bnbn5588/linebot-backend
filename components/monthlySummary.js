@@ -249,4 +249,6 @@ async function setSummary(connection, uname, on) {
   return r.rowsAffected > 0;
 }
 
-module.exports = { sendMonthlySummaries, setSummary, walletSummaries, message, lastMonth, prevMonthOf };
+module.exports = { sendMonthlySummaries, setSummary, walletSummaries, message, lastMonth, prevMonthOf,
+  // shared with components/notify.js (weekly summary, reminders)
+  push, row, small, change, fmtMoney, clip, CAT_EXPR };

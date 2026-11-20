@@ -432,6 +432,8 @@
         btn.append(el("span", "n", `${b.icon} ${b.label}`), v, track, el("span", "d " + level, line));
         const pace = paceLine(b);
         if (pace) btn.append(el("span", "d pace", pace));
+        const fast = fastLine(b);
+        if (fast) btn.append(el("span", "d pace fast", fast));
         btn.addEventListener("click", () => pickBudget(b.key));
         li.append(btn);
         return li;
@@ -462,6 +464,18 @@
 
   // Current month only: what is left spread over the days left (today counts).
   // "ใช้ได้วันละ ~290 · อีก 12 วัน รวมวันนี้" / last day: "วันนี้ใช้ได้อีก 3,200"
+  // "ใช้เร็วกว่ากำหนด": this month's use of the budget is 15+ points ahead of
+  // the share of the month gone by (e.g. 70% used on day 12 of 30 = 40%).
+  const FAST_MARGIN = 15;
+  function fastLine(b) {
+    if (state.month !== currentMonth(state.wallet.timezone)) return "";
+    if (!(Number(b.amount) > 0) || b.spent > b.amount) return "";
+    const today = Number(nowLocal(state.wallet.timezone).date.slice(8, 10));
+    const gone = Math.round((today / daysIn(state.month)) * 100);
+    const used = Math.floor((b.spent / b.amount) * 100);
+    if (used - gone < FAST_MARGIN) return "";
+    return `⚡ ใช้เร็วกว่ากำหนด · ใช้ไป ${used}% แต่เดือนผ่านไป ${gone}%`;
+  }
   function paceLine(b) {
     if (state.month !== currentMonth(state.wallet.timezone)) return "";
     const left = Number(b.amount) - Number(b.spent);
