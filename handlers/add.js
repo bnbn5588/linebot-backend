@@ -69,6 +69,16 @@ module.exports = async (req, res) => {
       // Establish a database connection
       connection = await getConnection();
 
+      // The wallet must exist and not be in the trash (no orphan records)
+      const w = await executeQuery(
+        connection,
+        "SELECT 1 FROM wallet WHERE uname = :uname AND wallet_id = :wallet_id AND deleted_at IS NULL",
+        { uname, wallet_id: Number(wallet_id) }
+      );
+      if (!w.rows.length) {
+        return res.status(404).json({ status: "error", message: "Wallet not found" });
+      }
+
       // Pick a category (#tag > remembered > keyword > other). A recognised
       // #tag is removed from the stored note.
       const cat = await categorize(connection, uname, note, parsedValue);

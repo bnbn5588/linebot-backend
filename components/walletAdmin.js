@@ -17,7 +17,8 @@ const TRASH_DAYS = 30;
 // Collapse spaces; null when empty or too long.
 function cleanName(name) {
   if (typeof name !== "string") return null;
-  const n = name.replace(/\s+/g, " ").trim();
+  // eslint-disable-next-line no-control-regex
+  const n = name.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
   return isTextWithin(n, NAME_MAX_BYTES) ? n : null;
 }
 
