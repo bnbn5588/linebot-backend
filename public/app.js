@@ -1775,17 +1775,132 @@
     if (picker.showModal) picker.showModal(); else picker.setAttribute("open", "");
     if (!state.allNotes) {
       $("npList").replaceChildren(el("li", "empty", "กำลังโหลด…"));
-      const wallet = state.wallet.wallet_id;
       try {
-        const data = await api("me-notes?" + q({ wallet_id: wallet }));
-        if (wallet !== state.wallet.wallet_id) return;
-        state.allNotes = data.notes;
+        if (!(await ensureNotes())) return;
       } catch (e) {
         if (!(e instanceof AuthError)) $("npList").replaceChildren(el("li", "empty", "โหลดไม่สำเร็จ ลองใหม่อีกครั้ง"));
         return;
       }
     }
     renderNotePicker();
+  }
+  // me-notes of the current wallet, loaded once (one request at a time);
+  // false when the wallet changed meanwhile
+  let notesLoading = null;
+  async function ensureNotes() {
+    if (state.allNotes) return true;
+    const wallet = state.wallet.wallet_id;
+    if (!notesLoading || notesLoading.wallet !== wallet) {
+      const p = api("me-notes?" + q({ wallet_id: wallet })).then((data) => {
+        if (wallet === state.wallet.wallet_id) state.allNotes = data.notes;
+      }).finally(() => { if (notesLoading && notesLoading.p === p) notesLoading = null; });
+      notesLoading = { wallet, p };
+    }
+    await notesLoading.p;
+    return wallet === state.wallet.wallet_id && !!state.allNotes;
+  }
+
+  // ---------- note suggestions under a "โน้ต" field (record + recurring editors)
+  // Typing lists up to 5 earlier notes of the wallet that contain the text
+  // (spaces and case ignored; ones that start with it first, then most used);
+  // an empty field lists the 5 most used. Only notes of the chosen kind.
+  // Each row: note, times used, last date and amount. Tap = use it.
+  const SUGGEST_MAX = 5;
+  const normNote = (t) => String(t || "").toLowerCase().replace(/\s+/g, "");
+  function shortDay(day) {
+    const [y, m, d] = day.split("-").map(Number);
+    const thisYear = nowLocal(state.wallet.timezone).date.slice(0, 4) === String(y);
+    return `${d} ${MONTHS_TH[m - 1]}${thisYear ? "" : " " + String((y + 543) % 100).padStart(2, "0")}`;
+  }
+  function noteSuggest(input, { kind, onPick }) {
+    const list = el("ul", "note-sug");
+    list.id = input.id + "Sug";
+    list.setAttribute("role", "listbox");
+    list.hidden = true;
+    input.closest("label").after(list); // in the layout: never covers บันทึก / ยกเลิก
+    input.setAttribute("role", "combobox");
+    input.setAttribute("aria-autocomplete", "list");
+    input.setAttribute("aria-controls", list.id);
+    input.setAttribute("aria-expanded", "false");
+    let shown = [], active = -1, seq = 0;
+    const hide = () => {
+      list.hidden = true;
+      shown = [];
+      active = -1;
+      input.setAttribute("aria-expanded", "false");
+      input.removeAttribute("aria-activedescendant");
+    };
+    const mark = () => {
+      [...list.children].forEach((li, i) => li.setAttribute("aria-selected", i === active ? "true" : "false"));
+      if (active >= 0) input.setAttribute("aria-activedescendant", `${list.id}-${active}`); else input.removeAttribute("aria-activedescendant");
+    };
+    const pick = (n) => {
+      input.value = n.text || n.note;
+      hide();
+      onPick(n);
+    };
+    const render = () => {
+      const k = kind();
+      const text = normNote(input.value);
+      let rows = (state.allNotes || []).filter((n) => ((Number(n.last_value ?? n.total) || 0) > 0 ? "income" : "expense") === k);
+      if (text) {
+        rows = rows.filter((n) => normNote(n.note).includes(text));
+        rows = [...rows.filter((n) => normNote(n.note).startsWith(text)), ...rows.filter((n) => !normNote(n.note).startsWith(text))];
+      }
+      shown = rows.slice(0, SUGGEST_MAX);
+      // the field already says exactly the only match: nothing to suggest
+      if (!shown.length || (shown.length === 1 && text && normNote(shown[0].note) === text)) return hide();
+      active = -1;
+      list.replaceChildren(...shown.map((n, i) => {
+        const li = el("li");
+        li.id = `${list.id}-${i}`;
+        li.setAttribute("role", "option");
+        const cat = n.last_category && state.categories.find((c) => c.key === n.last_category);
+        li.append(
+          el("span", "t", `${cat ? cat.icon + " " : ""}${n.text || n.note}`),
+          el("span", "m", `${n.count} ครั้ง · ล่าสุด ${n.last ? shortDay(n.last) + " " : ""}${money(n.last_value ?? 0, true)}`)
+        );
+        // keep the focus in the field (no blur before the tap)
+        li.addEventListener("pointerdown", (e) => e.preventDefault());
+        li.addEventListener("click", () => pick(n));
+        return li;
+      }));
+      list.hidden = false;
+      input.setAttribute("aria-expanded", "true");
+      mark();
+    };
+    const open = async () => {
+      const my = ++seq;
+      if (!state.allNotes) {
+        try { await ensureNotes(); } catch { return; } // no suggestions; typing still works
+        if (my !== seq || !dialog.open) return;
+      }
+      render();
+    };
+    input.addEventListener("input", open);
+    input.addEventListener("focus", open);
+    // Not closed on blur: a tap on บันทึก / ยกเลิก must not move them under
+    // the finger. Closed when another field gets the focus or the dialog closes.
+    const dialog = input.closest("dialog");
+    dialog.addEventListener("focusin", (e) => {
+      if (e.target !== input && /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) { seq++; hide(); }
+    });
+    dialog.addEventListener("close", () => { seq++; hide(); });
+    input.addEventListener("keydown", (e) => {
+      if (list.hidden || !shown.length) return;
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        active = (active + (e.key === "ArrowDown" ? 1 : shown.length - 1 + (active < 0 ? 1 : 0))) % shown.length;
+        mark();
+      } else if (e.key === "Enter" && active >= 0) {
+        e.preventDefault();
+        pick(shown[active]);
+      } else if (e.key === "Escape") {
+        e.preventDefault(); // close the list, not the dialog
+        hide();
+      }
+    });
+    return { hide, refresh: () => { if (!list.hidden) render(); } };
   }
   function closeNotePicker() {
     if (picker.close) picker.close(); else picker.removeAttribute("open");
@@ -1904,9 +2019,20 @@
     sel.replaceChildren(...items);
     sel.value = options.some((c) => c.key === selected) ? selected : isNew ? "" : (kind === "income" ? "other_income" : "other_expense");
   }
+  // a picked suggestion also sets its last category, only while adding and
+  // the category is still "ให้ระบบเดาให้" (a category the user chose stays)
+  const useLastCategory = (sel, n) => {
+    if (sel.value !== "" || !n.last_category) return;
+    if ([...sel.options].some((o) => o.value === n.last_category)) sel.value = n.last_category;
+  };
+  const fNoteSug = noteSuggest($("fNote"), {
+    kind: () => (dlg.querySelector("input[name=sign]:checked").value === "-" ? "expense" : "income"),
+    onPick: (n) => useLastCategory($("fCategory"), n),
+  });
   for (const r of dlg.querySelectorAll("input[name=sign]")) {
     r.addEventListener("change", (e) => {
       if (e.target.checked) fillCategorySelect(e.target.value === "-" ? "expense" : "income", $("fCategory").value);
+      fNoteSug.refresh();
     });
   }
 
@@ -2172,9 +2298,14 @@
   $("rPause").addEventListener("click", toggleRecPause);
   $("rDelete").addEventListener("click", deleteRec);
   $("rDay").addEventListener("change", recDayHint);
+  const rNoteSug = noteSuggest($("rNote"), {
+    kind: () => (recDlg.querySelector("input[name=rSign]:checked").value === "-" ? "expense" : "income"),
+    onPick: (n) => useLastCategory($("rCategory"), n),
+  });
   for (const r of recDlg.querySelectorAll("input[name=rSign]")) {
     r.addEventListener("change", (e) => {
       if (e.target.checked) fillRecCategory(e.target.value === "-" ? "expense" : "income", $("rCategory").value, !recEditing);
+      rNoteSug.refresh();
     });
   }
 

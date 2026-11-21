@@ -6,7 +6,8 @@ const { lineAuth } = require("../components/lineAuth");
 // Every note of one wallet of the signed-in user, from all months, for the
 // "เลือกโน้ต" picker: most used first. The key is the same as the by-note
 // list and the `note` filter of me-transactions / me-summary
-// (lower-case, trimmed).
+// (lower-case, trimmed). Also used for the note suggestions under the
+// "โน้ต" field of the record and recurring editors.
 const MAX_NOTES = 1000;
 
 module.exports = async (req, res) => {
@@ -23,7 +24,10 @@ module.exports = async (req, res) => {
       }
       const r = await executeQuery(
         connection,
-        `SELECT lower(trim(note)), count(*), sum(exvalue), TO_CHAR(max(fulldate), 'YYYY-MM-DD')
+        `SELECT lower(trim(note)), count(*), sum(exvalue), TO_CHAR(max(fulldate), 'YYYY-MM-DD'),
+                max(trim(note)) KEEP (DENSE_RANK LAST ORDER BY fulldate, trans_id),
+                max(category) KEEP (DENSE_RANK LAST ORDER BY fulldate, trans_id),
+                max(exvalue) KEEP (DENSE_RANK LAST ORDER BY fulldate, trans_id)
            FROM expense
           WHERE uname = :uname AND wallet_id = :wallet_id AND trim(note) IS NOT NULL
           GROUP BY lower(trim(note))
@@ -36,7 +40,11 @@ module.exports = async (req, res) => {
       res.status(200).json({
         status: "success",
         data: {
-          notes: rows.map(([note, count, total, last]) => ({ note, count, total, last })),
+          // text / last_category / last_value: the newest record with that note
+          // (as typed, its category or null, its amount) for the note suggestions
+          notes: rows.map(([note, count, total, last, text, lastCategory, lastValue]) => ({
+            note, count, total, last, text, last_category: lastCategory, last_value: lastValue,
+          })),
           truncated: r.rows.length > MAX_NOTES,
         },
       });

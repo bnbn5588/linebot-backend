@@ -88,6 +88,7 @@ their own records. `API_KEY` must never be put in the web page.
 |---|---|---|---|
 | `GET` | `/api/me` | – | Current wallet and all wallets (404 `NO_WALLET` if the user never created one) |
 | `GET` | `/api/me-summary` | `wallet_id`, `month` (`YYYY-MM`), `type`, `category`, `note` | Totals, income/expense/balance per month, totals by note and by category for the month (each note and category with `prev_total`, the month before — only the same days so far when `month` is the current month, see `compare.prev_days` — and `avg_total`, the average of the 3 months before over `compare.avg_months` months with records); with `category` and/or `note` (exact, lower-case trimmed like the by-note list), `filter_months` (also sent as the old name `category_months`); with `month`, `days` — income/expense/balance/count per day of that month that has records (category / note filter applied) |
+| `GET` | `/api/me-notes` | `wallet_id` | Every note of the wallet, most used first (`note` key, `count`, `total`, `last` date, and from the newest record `text` as typed, `last_category`, `last_value`); for the "เลือกโน้ต" picker and the note suggestions |
 | `GET` | `/api/me-transactions` | `wallet_id`, `month`, `q`, `type`, `category`, `note`, `limit` (≤200), `offset` | Records, newest first; `q` searches notes, `note` is an exact note |
 | `PUT` | `/api/me-transactions` | body: `id`, `exvalue`, `targetdate`, `detail` | Edit a record |
 | `DELETE` | `/api/me-transactions` | `id` | Delete a record |
@@ -111,7 +112,18 @@ month, dashed average of the days so far for รายรับ / รายจ�
 and **ปฏิทิน** (a Monday-first calendar, darker = bigger day); the daily views
 show the average per day, the 3 biggest days, and tapping a day shows its
 totals with "ดูรายการวันนี้" (scrolls the record list to that day). The choice
-is remembered per browser. It runs inside
+is remembered per browser.
+
+Note suggestions: typing in the "โน้ต" field of the record editor
+(เพิ่มรายการ / แก้ไขรายการ) or the recurring editor lists up to 5 earlier notes
+of the wallet with the same kind (รายจ่าย / รายรับ) that contain the text
+(spaces and case ignored; starts-with first, then most used), each with times
+used, last date and last amount; an empty field lists the 5 most used. Tapping
+one fills the note as last typed and, while adding with "ให้ระบบเดาให้", its
+last category. Arrow keys + Enter pick, Esc closes the list. The list sits in
+the form (it pushes the fields down, never covers บันทึก / ยกเลิก) and closes when
+another field gets the focus. Notes come from
+`/api/me-notes`, loaded once per wallet. It runs inside
 LINE (LIFF) or in a desktop browser via `https://liff.line.me/<LIFF ID>`.
 
 Setup in LINE Developers Console:
