@@ -27,6 +27,8 @@ const CATEGORY_KEYS = new Set(CATEGORIES.map((c) => c.key));
 // same filter_months narrowed to that note; by_note entries also carry
 // prev_total / avg_total. With `range=12` (and month), range12 has the
 // category totals of the 12 months ending with `month` and their average.
+// With `month`, days has a row per day of that month (category / note filter
+// applied, type not), for the daily chart and calendar.
 module.exports = async (req, res) => {
   if (req.method !== "GET") {
     return res.status(405).json({ status: "error", message: "Use GET." });
@@ -241,6 +243,25 @@ module.exports = async (req, res) => {
           { ...binds, ...(category ? { category } : {}), ...(noteKey ? { note_key: noteKey } : {}) }
         );
       }
+      // month only: one row per day of `month` that has records, narrowed to
+      // the picked category / note like filter_months (daily chart + heatmap)
+      let days = null;
+      if (month) {
+        const d = await executeQuery(
+          connection,
+          `SELECT TO_CHAR(fulldate, 'YYYY-MM-DD'),
+                  sum(CASE WHEN exvalue > 0 THEN exvalue ELSE 0 END),
+                  sum(CASE WHEN exvalue < 0 THEN exvalue ELSE 0 END),
+                  sum(exvalue),
+                  count(*)
+             FROM expense
+            WHERE uname = :uname AND wallet_id = :wallet_id ${monthFilter}${categoryFilter}${noteFilter}
+            GROUP BY TO_CHAR(fulldate, 'YYYY-MM-DD')
+            ORDER BY 1`,
+          { ...binds, month, ...(category ? { category } : {}), ...(noteKey ? { note_key: noteKey } : {}) }
+        );
+        days = d.rows.map((x) => ({ day: x[0], income: x[1], expense: x[2], balance: x[3], count: x[4] }));
+      }
       const monthRows = (r) => r.rows.map((x) => ({ month: x[0], income: x[1], expense: x[2], balance: x[3], count: x[4] }));
 
       const t = totals.rows[0];
@@ -285,6 +306,8 @@ module.exports = async (req, res) => {
           // per-month rows for the picked category and/or note (same shape as months)
           filter_months: filterMonths ? monthRows(filterMonths) : null,
           category_months: filterMonths ? monthRows(filterMonths) : null, // old name, for pages still open
+          // month only: [{ day: YYYY-MM-DD, income, expense, balance, count }] for days with records
+          days,
         },
       });
     } catch (error) {

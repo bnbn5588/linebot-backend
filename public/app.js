@@ -43,9 +43,12 @@
     pendingDelete: null, // { t, at, timer, toast } while "เลิกทำ" is offered
     allNotes: null, // me-notes of the current wallet (picker), reloaded after edits
     catRange: "month", // category card: "month" | "12" (last 12 months)
+    chartView: "month", // chart card: month (12 months) | day (bars per day) | cal (calendar)
+    daySel: null, // YYYY-MM-DD tapped in the daily chart / calendar
     txSort: "new", // record list: new | old | amount_desc | amount_asc
   };
   const TX_SORTS = new Set(["new", "old", "amount_desc", "amount_asc"]);
+  const CHART_VIEWS = new Set(["month", "day", "cal"]);
 
   // ---------- helpers
   const store = {
@@ -220,6 +223,10 @@
     if (savedSort && TX_SORTS.has(savedSort)) {
       state.txSort = savedSort;
       document.querySelector(`input[name=txSort][value="${savedSort}"]`).checked = true;
+    }
+    if (CHART_VIEWS.has(store.get("chartView"))) {
+      state.chartView = store.get("chartView");
+      document.querySelector(`input[name=chartView][value='${state.chartView}']`).checked = true;
     }
     if (store.get("catRange") === "12") {
       state.catRange = "12";
@@ -852,7 +859,7 @@
   // the wallet's first record are left out; months with nothing count as 0.
   function renderChartStats() {
     const box = $("chartStats");
-    if (!state.category && !state.note) {
+    if (state.chartView !== "month" || (!state.category && !state.note)) {
       box.hidden = true;
       return;
     }
@@ -882,6 +889,225 @@
   }
 
   function renderChart() {
+    const daily = state.chartView !== "month";
+    $("dayTop").hidden = !daily;
+    if (state.daySel && state.daySel.slice(0, 7) !== state.month) state.daySel = null;
+    if (!daily) return renderMonthChart();
+    $("chartLegend").hidden = state.chartView === "cal" || chartType() !== "all";
+    const cat = state.category ? ` · ${state.category.icon} ${state.category.label}` : "";
+    const note = state.note ? ` · 📝 ${clipText(state.note.key, 24)}` : "";
+    $("chartTitle").textContent = `${TYPES[chartType()].label}รายวัน` + cat + note;
+    if (state.chartView === "cal") renderCalendar(); else renderDayChart();
+    renderDaySel();
+    renderDayTop();
+  }
+
+  // ---------- daily chart / calendar (one month, from me-summary days)
+  // Every day of state.month with its totals (0 for days without records);
+  // future: a day after today (current month), not counted in the average.
+  function monthDays() {
+    const by = new Map((state.summary.days || []).map((d) => [d.day, d]));
+    const today = nowLocal(state.wallet.timezone).date;
+    const out = [];
+    for (let i = 1; i <= daysIn(state.month); i++) {
+      const day = `${state.month}-${String(i).padStart(2, "0")}`;
+      const r = by.get(day) || { day, income: 0, expense: 0, balance: 0, count: 0 };
+      const wd = new Date(Date.UTC(Number(day.slice(0, 4)), Number(day.slice(5, 7)) - 1, i)).getUTCDay();
+      out.push({ ...r, n: i, wd, future: day > today, today: day === today });
+    }
+    return out;
+  }
+  // What "ใช้เยอะ" ranks: expense (also for ทั้งหมด), or income for รายรับ
+  function dayRank() {
+    const income = chartType() === "income";
+    return { field: income ? "income" : "expense", verb: income ? "ได้" : "ใช้", size: (r) => Math.abs(Number(r[income ? "income" : "expense"]) || 0) };
+  }
+  function dayText(day) {
+    const [y, m, d] = day.split("-").map(Number);
+    return `${DAYS_TH[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]} ${d} ${MONTHS_TH[m - 1]}`;
+  }
+  function pickDay(day) {
+    state.daySel = state.daySel === day ? null : day;
+    hideTip();
+    renderChart();
+  }
+
+  function renderDayChart() {
+    const box = $("chart");
+    const rows = monthDays();
+    const W = Math.max(box.clientWidth || 320, 280);
+    const H = 190;
+    const pad = { l: 40, r: 4, t: 18, b: 22 };
+    const iw = W - pad.l - pad.r;
+    const ih = H - pad.t - pad.b;
+    const T = TYPES[chartType()];
+    const vals = rows.map((r) => Number(r[T.field]) || 0);
+    const past = rows.filter((r) => !r.future);
+    const avg = past.length ? past.reduce((a, r) => a + (Number(r[T.field]) || 0), 0) / past.length : 0;
+    const step = niceStep((Math.max(0, ...vals) - Math.min(0, ...vals)) / 3 || 1);
+    const lo = Math.floor(Math.min(0, ...vals) / step) * step;
+    const hi = Math.ceil(Math.max(0, ...vals) / step) * step || step;
+    const y = (v) => pad.t + ((hi - v) / (hi - lo)) * ih;
+    const band = iw / rows.length;
+    const bw = Math.max(Math.min(14, band * 0.7), 2);
+    const s = svg("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `กราฟ${T.label}รายวัน ${monthLabel(state.month)}` });
+
+    // weekend columns behind the bars
+    rows.forEach((r, i) => {
+      if (r.wd === 0 || r.wd === 6) s.append(svg("rect", { x: pad.l + band * i, y: pad.t, width: band, height: ih, class: "wkend" }));
+    });
+    for (let v = lo; v <= hi + step / 2; v += step) {
+      const yy = Math.round(y(v)) + 0.5;
+      s.append(svg("line", { x1: pad.l, x2: W - pad.r, y1: yy, y2: yy, class: v === 0 ? "zero" : "grid" }));
+      const t = svg("text", { x: pad.l - 6, y: yy + 4, "text-anchor": "end", class: "axis" });
+      t.textContent = v === 0 ? "0" : compactFmt.format(v);
+      s.append(t);
+    }
+    const y0 = y(0);
+    rows.forEach((r, i) => {
+      const cx = pad.l + band * i + band / 2;
+      const x = cx - bw / 2;
+      const v = Number(r[T.field]) || 0;
+      const dim = state.daySel && state.daySel !== r.day;
+      if (v !== 0) {
+        const yv = y(v);
+        const h = Math.max(Math.abs(yv - y0), 1);
+        const rad = Math.min(3, h, bw / 2);
+        const d = v > 0
+          ? `M${x},${y0} V${yv + rad} Q${x},${yv} ${x + rad},${yv} H${x + bw - rad} Q${x + bw},${yv} ${x + bw},${yv + rad} V${y0} Z`
+          : `M${x},${y0} V${yv - rad} Q${x},${yv} ${x + rad},${yv} H${x + bw - rad} Q${x + bw},${yv} ${x + bw},${yv - rad} V${y0} Z`;
+        s.append(svg("path", { d, class: `bar ${v > 0 ? "pos" : "neg"}${dim ? " dim" : ""}` }));
+      } else if (r.future) {
+        s.append(svg("line", { x1: x, x2: x + bw, y1: y0 - 2, y2: y0 - 2, class: "future" }));
+      }
+      const sel = state.daySel === r.day;
+      if (sel || r.today || r.n === 1 || r.n % 5 === 0) {
+        // keep labels apart: a 1st / 5th-day label next to the picked or today label is skipped
+        const crowded = !sel && !r.today && rows.some((q) => (q.today || q.day === state.daySel) && q.n !== r.n && Math.abs(q.n - r.n) <= 2);
+        if (!crowded) {
+          const at = svg("text", { x: cx, y: H - 6, "text-anchor": "middle", class: "axis" + (sel || (r.today && !state.daySel) ? " sel" : "") });
+          at.textContent = String(r.n);
+          s.append(at);
+        }
+      }
+      const hit = svg("rect", { x: pad.l + band * i, y: pad.t, width: band, height: ih + pad.b, class: "hit", tabindex: "0", role: "button", "aria-label": `${dayText(r.day)} ${T.label} ${money(v, true)} ${r.count} รายการ` });
+      hit.addEventListener("pointerenter", () => showTip(r, cx / W));
+      hit.addEventListener("pointerleave", hideTip);
+      hit.addEventListener("focus", () => showTip(r, cx / W));
+      hit.addEventListener("blur", hideTip);
+      hit.addEventListener("click", () => pickDay(r.day));
+      hit.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pickDay(r.day); } });
+      s.append(hit);
+    });
+    // average of the days so far (dashed), drawn over the bars; not for the
+    // net of ทั้งหมด (the line above the chart is the spending average)
+    if (avg && past.length && chartType() !== "all") {
+      const ya = Math.round(y(avg)) + 0.5;
+      s.insertBefore(svg("line", { x1: pad.l, x2: W - pad.r, y1: ya, y2: ya, class: "avg" }), s.querySelector(".hit"));
+    }
+    box.replaceChildren(s);
+  }
+
+  // Calendar Mon–Sun; the colour gets stronger with the day's amount
+  // (blue = more in, red = more out, like the bars).
+  function renderCalendar() {
+    const box = $("chart");
+    const rows = monthDays();
+    const T = TYPES[chartType()];
+    const max = Math.max(0, ...rows.map((r) => Math.abs(Number(r[T.field]) || 0)));
+    const grid = el("div", "cal");
+    grid.setAttribute("role", "grid");
+    grid.setAttribute("aria-label", `ปฏิทิน${T.label}รายวัน ${monthLabel(state.month)}`);
+    for (const w of ["จ", "อ", "พ", "พฤ", "ศ", "ส", "อา"]) grid.append(el("span", "wd", w));
+    const lead = (rows[0].wd + 6) % 7; // blanks before day 1 (week starts Monday)
+    for (let i = 0; i < lead; i++) grid.append(el("span", "blank"));
+    for (const r of rows) {
+      const v = Number(r[T.field]) || 0;
+      const b = el("button", "c" + (r.future ? " future" : "") + (r.today ? " today" : "") + (state.daySel === r.day ? " sel" : ""));
+      b.type = "button";
+      const a = max && v ? 0.15 + 0.75 * (Math.abs(v) / max) : 0;
+      if (a) {
+        const bg = el("span", "bg " + (v > 0 ? "pos" : "neg"));
+        bg.style.opacity = a.toFixed(2);
+        b.append(bg);
+        if (a >= 0.6) b.classList.add("strong");
+      }
+      b.append(el("span", "n", String(r.n)), el("span", "v", v ? compactFmt.format(Math.abs(v)) : ""));
+      b.setAttribute("aria-label", `${dayText(r.day)} ${T.label} ${money(v, true)} ${r.count} รายการ`);
+      b.addEventListener("click", () => pickDay(r.day));
+      grid.append(b);
+    }
+    box.replaceChildren(grid);
+  }
+
+  // Above the chart: the tapped day (with a jump to its records), else the
+  // average per day so far and the biggest day.
+  function renderDaySel() {
+    const box = $("chartSel");
+    const rows = monthDays();
+    const R = dayRank();
+    const T = TYPES[chartType()];
+    if (state.daySel) {
+      const r = rows.find((q) => q.day === state.daySel);
+      const go = el("button", "linkbtn", "ดูรายการวันนี้");
+      go.type = "button";
+      go.addEventListener("click", () => run(() => jumpToDay(r.day)));
+      const what = chartType() === "all"
+        ? `รายรับ ${money(r.income)} · รายจ่าย ${money(r.expense)}`
+        : `${T.label} ${money(r[T.field])}`;
+      box.replaceChildren(el("b", "", dayText(r.day)), `: ${what} · ${r.count} รายการ `, ...(r.count ? [go] : []));
+      return;
+    }
+    const past = rows.filter((q) => !q.future);
+    if (!past.length || !past.some((q) => R.size(q))) {
+      box.replaceChildren(`${monthLabel(state.month)}: ไม่มี${R.field === "income" ? "รายรับ" : "รายจ่าย"}`);
+      return;
+    }
+    const total = past.reduce((a, q) => a + R.size(q), 0);
+    const top = past.reduce((a, q) => (R.size(q) > R.size(a) ? q : a));
+    box.replaceChildren(
+      `เฉลี่ย${R.verb}วันละ `, el("b", "", money(Math.round(total / past.length))),
+      ` · ${R.verb}เยอะสุด ${dayText(top.day)} `, el("b", "", money(R.size(top)))
+    );
+  }
+
+  // Under the chart: the 3 biggest days of the month (tap = pick that day)
+  function renderDayTop() {
+    const box = $("dayTop");
+    const R = dayRank();
+    const top = monthDays().filter((r) => R.size(r) > 0).sort((a, b) => R.size(b) - R.size(a) || a.n - b.n).slice(0, 3);
+    if (!top.length) {
+      box.hidden = true;
+      return;
+    }
+    const ul = el("ul");
+    for (const r of top) {
+      const b = el("button", state.daySel === r.day ? "sel" : "");
+      b.type = "button";
+      b.append(el("span", "", dayText(r.day)), el("span", "amt", money(R.field === "income" ? R.size(r) : -R.size(r))), el("span", "muted", `${r.count} รายการ`));
+      b.addEventListener("click", () => pickDay(r.day));
+      const li = el("li");
+      li.append(b);
+      ul.append(li);
+    }
+    box.replaceChildren(el("h3", "", `🔝 ${top.length} วันที่${R.verb}เยอะสุด`), ul);
+    box.hidden = false;
+  }
+
+  // "ดูรายการวันนี้": scroll the record list to that day, loading more pages
+  // when it is further down than what is loaded.
+  async function jumpToDay(day) {
+    const find = () => $("txList").querySelector(`li.dh[data-day="${day}"]`) || $("txList").querySelector(`li[data-day="${day}"]`);
+    for (let i = 0; !find() && state.hasMore && i < 20; i++) await loadTx(false);
+    const at = find() || $("secTx");
+    at.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+    if (at !== $("secTx")) {
+      at.classList.add("flash");
+      setTimeout(() => at.classList.remove("flash"), 1600);
+    }
+  }
+
+  function renderMonthChart() {
     const box = $("chart");
     const rows = chartWindow();
     const W = Math.max(box.clientWidth || 320, 280);
@@ -964,7 +1190,7 @@
       return d;
     };
     tip.replaceChildren(
-      el("b", "", monthLabel(r.month)),
+      el("b", "", r.day ? dayText(r.day) : monthLabel(r.month)),
       rowEl("รายรับ", money(r.income)),
       rowEl("รายจ่าย", money(r.expense)),
       rowEl("คงเหลือ", money(r.balance, true)),
@@ -981,6 +1207,17 @@
 
   function renderMonthTable() {
     const body = $("monthTable");
+    const daily = state.chartView !== "month";
+    $("chartTableHead").firstElementChild.firstElementChild.textContent = daily ? "วัน" : "เดือน";
+    if (daily) {
+      const rows = (state.summary.days || []);
+      body.replaceChildren(...(rows.length ? rows.map((d) => {
+        const tr = el("tr");
+        tr.append(el("td", "", dayText(d.day)), el("td", "", money(d.income)), el("td", "", money(d.expense)), el("td", "", money(d.balance, true)));
+        return tr;
+      }) : [(() => { const tr = el("tr"); const td = el("td", "", "ไม่มีรายการ"); td.colSpan = 4; tr.append(td); return tr; })()]));
+      return;
+    }
     body.replaceChildren(...[...seriesMonths()].reverse().map((m) => {
       const tr = el("tr");
       tr.append(el("td", "", monthLabel(m.month)), el("td", "", money(m.income)), el("td", "", money(m.expense)), el("td", "", money(m.balance, true)));
@@ -1292,6 +1529,7 @@
           lastDay = day;
           const d = byDay.get(day);
           const h = el("li", "dh");
+          h.dataset.day = day;
           h.append(el("span", "", dayLabel(day)), el("span", "", d ? `${money(d.total, true)} · ${d.count} รายการ` : ""));
           out.push(h);
         }
@@ -1303,6 +1541,7 @@
           out.push(h);
         }
         const li = el("li");
+        li.dataset.day = day;
         out.push(li);
         const b = el("button");
         b.type = "button";
@@ -2014,6 +2253,18 @@
       state.txSort = e.target.value;
       store.set("txSort", state.txSort);
       run(() => loadTx(true));
+    });
+  }
+  for (const r of document.querySelectorAll("input[name=chartView]")) {
+    r.addEventListener("change", (e) => {
+      if (!e.target.checked || !CHART_VIEWS.has(e.target.value)) return;
+      state.chartView = e.target.value;
+      store.set("chartView", state.chartView);
+      hideTip();
+      if (!state.summary) return;
+      renderChart();
+      renderChartStats();
+      renderMonthTable();
     });
   }
   for (const r of document.querySelectorAll("input[name=catRange]")) {
