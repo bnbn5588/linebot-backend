@@ -42,6 +42,7 @@
         <button type="button" data-target="secOverview">ภาพรวม</button>
         <button type="button" data-target="secCats">หมวด</button>
         <button type="button" data-target="budgetCard">งบ</button>
+        <button type="button" data-target="recCard">ประจำ</button>
         <button type="button" data-target="secNotes">โน้ต</button>
         <button type="button" data-target="secTx">รายการ</button>
       </nav>
@@ -120,6 +121,13 @@
         </div>
       </section>
 
+      <section class="card" id="recCard">
+        <div class="card-head"><h2>รายการประจำ</h2><span class="muted" id="recCount"></span></div>
+        <ul class="tx rec" id="recList"></ul>
+        <button type="button" class="btn wide" id="recAdd" aria-haspopup="dialog">＋ เพิ่มรายการประจำ</button>
+        <p class="muted budget-help" id="recHelp">บันทึกให้อัตโนมัติตอน 7 โมงเช้า (เวลาไทย) ของวันที่ตั้งไว้ เดือนละครั้ง และแจ้งใน LINE พร้อมปุ่มยกเลิก</p>
+      </section>
+
       <section class="card" id="secNotes">
         <div class="card-head"><h2>แยกตามโน้ต</h2><span class="muted" id="noteMonth"></span></div>
         <div class="chip-row" id="noteChipRow" hidden></div>
@@ -182,6 +190,41 @@
         <span class="spacer"></span>
         <button type="button" class="btn ghost" id="btnCancel">ยกเลิก</button>
         <button type="submit" class="btn primary" id="btnSave">บันทึก</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="recEditor" class="sheet" aria-labelledby="recTitle">
+    <form id="recForm" method="dialog">
+      <h2 id="recTitle">เพิ่มรายการประจำ</h2>
+      <div class="seg" role="radiogroup" aria-label="ประเภท">
+        <label><input type="radio" name="rSign" value="-" checked> รายจ่าย</label>
+        <label><input type="radio" name="rSign" value="+"> รายรับ</label>
+      </div>
+      <label class="field">จำนวนเงิน
+        <input id="rAmount" inputmode="decimal" autocomplete="off" required placeholder="เช่น 8000">
+      </label>
+      <label class="field">โน้ต
+        <input id="rNote" maxlength="250" autocomplete="off" required placeholder="เช่น ค่าเช่า">
+      </label>
+      <label class="field">หมวด
+        <select id="rCategory"></select>
+      </label>
+      <label class="field">วันที่ของทุกเดือน
+        <select id="rDay"></select>
+      </label>
+      <p class="muted rec-hint" id="rDayHint" hidden>เดือนที่ไม่มีวันนี้ จะบันทึกในวันสุดท้ายของเดือน</p>
+      <label class="check"><input type="checkbox" id="rNotify" checked> แจ้งใน LINE เมื่อบันทึก</label>
+      <p class="muted rec-hint" id="rNext" hidden></p>
+      <div class="rec-manage" id="rManage">
+        <button type="button" class="btn" id="rPause">⏸ หยุดชั่วคราว</button>
+        <button type="button" class="btn danger" id="rDelete">ลบ</button>
+      </div>
+      <p class="form-error" id="recError" role="alert" hidden></p>
+      <div class="actions">
+        <span class="spacer"></span>
+        <button type="button" class="btn ghost" id="rCancel">ยกเลิก</button>
+        <button type="submit" class="btn primary" id="rSave">บันทึก</button>
       </div>
     </form>
   </dialog>

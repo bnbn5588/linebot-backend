@@ -73,6 +73,17 @@ const HELP = {
         ],
         note: "งบแยกตามกระเป๋า และใช้ทุกเดือนจนกว่าจะแก้หรือลบ",
         buttons: [{ label: "💰 ตั้งงบในหน้าเว็บ", uri: WEB_APP_URL }] },
+      { title: "🔁 รายการประจำ",
+        lines: [
+          "ตั้งรายการที่จ่ายหรือได้ทุกเดือน เช่น ค่าเช่า ค่าเน็ต เงินเดือน ในหน้าเว็บ ที่การ์ด \"รายการประจำ\"",
+          "ระบบบันทึกให้เองตอน 7 โมงเช้า (เวลาไทย) ของวันที่ตั้งไว้ และส่งข้อความบอก พร้อมปุ่มยกเลิก",
+        ],
+        rows: [["ประจำ", "ดูรายการประจำของกระเป๋าที่ใช้อยู่"]],
+        note: "เลือกให้บันทึกเงียบ ๆ ไม่ต้องแจ้งก็ได้ หยุดชั่วคราวหรือลบได้ในหน้าเว็บ",
+        buttons: [
+          { label: "🔁 ดูรายการประจำ", text: "ประจำ" },
+          { label: "🌐 ตั้งในหน้าเว็บ", uri: WEB_APP_URL },
+        ] },
       { title: "✨ อื่นๆ",
         lines: [
           "🌐 หน้าเว็บ: กราฟ แยกตามหมวด ค้นหา แก้ไขรายการ",
@@ -145,6 +156,17 @@ const HELP = {
         ],
         note: "Budgets are per wallet and apply every month until changed",
         buttons: [{ label: "💰 Set budgets", uri: WEB_APP_URL }] },
+      { title: "🔁 Recurring",
+        lines: [
+          "Set records that repeat every month (rent, internet, salary) in the web app (\"รายการประจำ\" card)",
+          "They are recorded at 7:00 (Thai time) on their day, and the bot tells you, with an undo button",
+        ],
+        rows: [["recurring", "List the current wallet's recurring items"]],
+        note: "Each item can be silent instead; pause or delete it in the web app",
+        buttons: [
+          { label: "🔁 My recurring", text: "recurring" },
+          { label: "🌐 Set in web app", uri: WEB_APP_URL },
+        ] },
       { title: "✨ More",
         lines: [
           "🌐 Web app: charts, categories, search, edit records",

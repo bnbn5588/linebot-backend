@@ -58,7 +58,7 @@ async function list(req, res, connection, uname) {
 
   const result = await executeQuery(
     connection,
-    `SELECT trans_id, exvalue, TO_CHAR(fulldate, 'YYYY-MM-DD HH24:MI:SS'), note, category
+    `SELECT trans_id, exvalue, TO_CHAR(fulldate, 'YYYY-MM-DD HH24:MI:SS'), note, category, recurring_id
        FROM expense
       WHERE uname = :uname AND wallet_id = :wallet_id${filters}
       ORDER BY ${order}
@@ -101,7 +101,7 @@ async function list(req, res, connection, uname) {
     status: "success",
     data: {
       wallet,
-      transactions: rows.map((r) => ({ id: r[0], exvalue: r[1], datetime: r[2], note: r[3], category: describe(r[4], r[1]) })),
+      transactions: rows.map((r) => ({ id: r[0], exvalue: r[1], datetime: r[2], note: r[3], category: describe(r[4], r[1]), ...(r[5] ? { recurring: true } : {}) })),
       has_more: result.rows.length > limit,
       offset,
       limit,
