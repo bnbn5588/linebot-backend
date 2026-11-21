@@ -61,10 +61,13 @@ x-api-key: <API_KEY>
 | `GET` | `/api/wallets` | `userid` | All wallets of a user |
 | `POST` | `/api/createWallet` | body: `uname`, `wallet_name`, `timezone` | Create a wallet and make it current (one transaction) |
 | `POST` | `/api/changeWallet` | body: `uname`, `wallet_id` | Switch the current wallet |
+| `POST` | `/api/manageWallet` | body: `uname`, `action` (`rename` \| `info` \| `delete` \| `trash` \| `restore`), `wallet_id`, `wallet_name` | Rename a wallet, move it to the trash (`wallet_name` must match) or restore it (see [Wallet trash](#wallet-trash)) |
+| `POST` | `/api/purge-wallets` | – | Delete wallets trashed more than 30 days ago (daily cron) |
 | `GET` | `/api/help` | `lang` (`th` or `en`) | Help content as cards (shown by the bot's `help` / `ช่วยเหลือ`); edit it in `components/help.js` |
 | `POST` | `/api/ai-sweep` | body: optional `days`, `max` | Ask Gemini again for recent "other" records (see [Admin website](#admin-website)) |
 | `POST` | `/api/monthly-summary` | body: optional `month`, `only`, `force`, `dry_run` | Push last month's summary to every user (see [Monthly summary](#monthly-summary)) |
-| `POST` | `/api/summarySetting` | body: `uname`, `on` (true/false) | Monthly summary on/off (the bot's "เปิด/ปิดสรุปรายเดือน") |
+| `POST` | `/api/summarySetting` | body: `uname`, `on` (true/false), optional `kind` (`monthly` default \| `weekly` \| `remind` \| `nospend`) | Monthly summary, weekly summary or reminder on/off; `nospend` = "no spending today" (see [Reminders](#reminders-and-weekly-summary)) |
+| `POST` | `/api/notify` | body: `job` (`remind` \| `weekly`), optional `only`, `force`, `dry_run` | Run the daily reminder or the weekly summary (cron) |
 | `GET` | `/api/ping` | – | Keep-warm check: runs `SELECT 1 FROM DUAL`, returns `db_ms` |
 | `GET` | `/api/admin-overview` | – | Admin site data (LINE ID token of an admin, see [Admin website](#admin-website)) |
 | `GET` `PUT` `DELETE` | `/api/admin-category-map` | PUT `note`, `category`; DELETE `note_key`, `kind` | Shared note → category mapping for all users (admin only) |
@@ -87,6 +90,9 @@ their own records. `API_KEY` must never be put in the web page.
 | `GET` | `/api/me-transactions` | `wallet_id`, `month`, `q`, `type`, `category`, `note`, `limit` (≤200), `offset` | Records, newest first; `q` searches notes, `note` is an exact note |
 | `PUT` | `/api/me-transactions` | body: `id`, `exvalue`, `targetdate`, `detail` | Edit a record |
 | `DELETE` | `/api/me-transactions` | `id` | Delete a record |
+| `GET` | `/api/me-wallets` | – | Wallets with record count and balance, plus `trash` (each with `purge_on`, `days_left`) and `trash_days` |
+| `PUT` | `/api/me-wallets` | body: `wallet_id`, `wallet_name` or `restore: true` | Rename a wallet or restore it from the trash |
+| `DELETE` | `/api/me-wallets` | `wallet_id` | Move a wallet to the trash (not the last one) |
 
 `wallet_id` is optional (defaults to the current wallet) and must belong to the user.
 Invalid or expired tokens return 401.
@@ -215,6 +221,55 @@ one message of the LINE OA monthly quota (a 429 stops the run).
   `force: true` resends, `only: <uname>` sends to one user (tests),
   `dry_run: true` returns the messages and sends nothing.
 
+## Wallet trash
+
+`components/walletAdmin.js`, migration 009 (`WALLET.deleted_at`). Deleting a
+wallet (bot: "ลบกระเป๋า" / "delete wallet" with a confirm card; web: ⚙ next to
+the wallet picker) only sets `deleted_at`: the wallet disappears from every list
+and cannot be used, but its records and budgets stay. It can be restored for 30
+days (bot: "ถังขยะ" / "กู้กระเป๋า" / "trash"; web: the trash section of ⚙).
+The last remaining wallet cannot be deleted; if the current wallet is deleted,
+the user switches to another one. Trashed wallets keep their id, so a new
+wallet never reuses it.
+
+Every day at 03:30 Thai time the server cron runs `scripts/purge-wallets.sh`
+(`30 20 * * *`, log `~/devbox/purge-wallets.log`), which calls
+`POST /api/purge-wallets`: wallets trashed more than 30 days ago are deleted for
+good with their records, budgets and remembered categories no longer used.
+
+## Reminders and weekly summary
+
+`components/notify.js`, migration 010 (`USERS.remind_on`, `remind_last`,
+`remind_skip`, `remind_streak`, `weekly_on`, `weekly_sent`). Both are off until
+the user turns them on in the bot (or with the buttons on the help card):
+
+| Bot command | Effect |
+|---|---|
+| "เปิดเตือนจด" / "remind on" | Daily reminder on |
+| "ปิดเตือนจด" / "remind off" | Daily reminder off |
+| "เปิดสรุปรายสัปดาห์" / "weekly on" | Weekly summary on |
+| "ปิดสรุปรายสัปดาห์" / "weekly off" | Weekly summary off |
+
+- **Reminder** — every day at 21:00 Thai time (`0 14 * * *`,
+  `scripts/notify.sh remind`). A user gets a push only if they have no record
+  today (in their current wallet's timezone) in any wallet and did not press
+  "วันนี้ไม่ได้ใช้เงิน" (no spending today). After 7 reminders in a row with no
+  record the reminders pause until the user records again; the 7th message
+  says so.
+- **Weekly summary** — every Monday at 09:00 Thai time (`0 2 * * 1`,
+  `scripts/notify.sh weekly`): a card per wallet for last Monday–Sunday with
+  income, expense and the top 3 categories, each vs the week before.
+  `weekly_sent` makes a rerun never send twice.
+- Both jobs log to `~/devbox/notify.log` (counts only). Each message uses the
+  LINE OA monthly push quota; a job stops at 90% of the quota, or when the quota
+  cannot be read (`QUOTA_CHECK_FAILED`).
+- `POST /api/notify` takes `only: <uname>` (tests), `dry_run: true` (return the
+  messages, send nothing) and `force: true` (ignore "already sent").
+
+The web app's budget card also shows "⚡ ใช้เร็วกว่ากำหนด" for the current month
+when the share of the budget used is at least 15 points ahead of the share of
+the month passed.
+
 ## Requirements
 
 - Node.js 26.x (pinned in `package.json` `engines`; Vercel no longer runs 20.x)
@@ -255,6 +310,10 @@ Cron entry on the server:
 ```
 */5 * * * * /home/opc/repos/linebot-backend/scripts/keepwarm.sh
 ```
+
+Other server cron jobs (all times UTC): `0 2 1 * *` `monthly-summary.sh`,
+`30 20 * * *` `purge-wallets.sh`, `0 14 * * *` `notify.sh remind`,
+`0 2 * * 1` `notify.sh weekly`, `0 20 * * *` `ai-sweep.sh`.
 
 ## License
 
