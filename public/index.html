@@ -78,15 +78,21 @@
             <span><i class="swatch neg"></i>ติดลบ</span>
           </div>
         </div>
+        <div class="filter filter3v" role="radiogroup" aria-label="มุมมองกราฟ">
+          <label><input type="radio" name="chartView" value="month" checked> รายเดือน</label>
+          <label><input type="radio" name="chartView" value="day"> รายวัน</label>
+          <label><input type="radio" name="chartView" value="cal"> ปฏิทิน</label>
+        </div>
         <div class="chip-row" id="chartChipRow" hidden></div>
         <div class="chart-sel num" id="chartSel"></div>
         <div class="chart" id="chart"></div>
         <div class="tooltip" id="tooltip" role="status" hidden></div>
         <p class="chart-stats" id="chartStats" hidden></p>
+        <div class="day-top" id="dayTop" hidden></div>
         <details class="table-view">
           <summary>ดูเป็นตาราง</summary>
           <table>
-            <thead><tr><th>เดือน</th><th>รายรับ</th><th>รายจ่าย</th><th>คงเหลือ</th></tr></thead>
+            <thead id="chartTableHead"><tr><th>เดือน</th><th>รายรับ</th><th>รายจ่าย</th><th>คงเหลือ</th></tr></thead>
             <tbody id="monthTable"></tbody>
           </table>
         </details>

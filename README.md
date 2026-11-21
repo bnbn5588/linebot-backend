@@ -87,7 +87,7 @@ their own records. `API_KEY` must never be put in the web page.
 | Method | Endpoint | Parameters | Description |
 |---|---|---|---|
 | `GET` | `/api/me` | – | Current wallet and all wallets (404 `NO_WALLET` if the user never created one) |
-| `GET` | `/api/me-summary` | `wallet_id`, `month` (`YYYY-MM`), `type`, `category`, `note` | Totals, income/expense/balance per month, totals by note and by category for the month (each note and category with `prev_total`, the month before — only the same days so far when `month` is the current month, see `compare.prev_days` — and `avg_total`, the average of the 3 months before over `compare.avg_months` months with records); with `category` and/or `note` (exact, lower-case trimmed like the by-note list), `filter_months` (also sent as the old name `category_months`) |
+| `GET` | `/api/me-summary` | `wallet_id`, `month` (`YYYY-MM`), `type`, `category`, `note` | Totals, income/expense/balance per month, totals by note and by category for the month (each note and category with `prev_total`, the month before — only the same days so far when `month` is the current month, see `compare.prev_days` — and `avg_total`, the average of the 3 months before over `compare.avg_months` months with records); with `category` and/or `note` (exact, lower-case trimmed like the by-note list), `filter_months` (also sent as the old name `category_months`); with `month`, `days` — income/expense/balance/count per day of that month that has records (category / note filter applied) |
 | `GET` | `/api/me-transactions` | `wallet_id`, `month`, `q`, `type`, `category`, `note`, `limit` (≤200), `offset` | Records, newest first; `q` searches notes, `note` is an exact note |
 | `PUT` | `/api/me-transactions` | body: `id`, `exvalue`, `targetdate`, `detail` | Edit a record |
 | `DELETE` | `/api/me-transactions` | `id` | Delete a record |
@@ -104,8 +104,14 @@ Invalid or expired tokens return 401.
 
 ## Web app (LIFF)
 
-`public/index.html`, `app.js`, `app.css` — a dashboard (monthly balance chart,
-totals by note) and a record list with search, edit and delete. It runs inside
+`public/index.html`, `app.js`, `app.css` — a dashboard (balance chart, totals
+by note) and a record list with search, edit and delete. The chart card switches
+between **รายเดือน** (12 months), **รายวัน** (one bar per day of the selected
+month, dashed average of the days so far for รายรับ / รายจ่าย, weekends shaded)
+and **ปฏิทิน** (a Monday-first calendar, darker = bigger day); the daily views
+show the average per day, the 3 biggest days, and tapping a day shows its
+totals with "ดูรายการวันนี้" (scrolls the record list to that day). The choice
+is remembered per browser. It runs inside
 LINE (LIFF) or in a desktop browser via `https://liff.line.me/<LIFF ID>`.
 
 Setup in LINE Developers Console:
