@@ -30,6 +30,7 @@ const routes = new Map([
   ["me-transactions", require("../handlers/me-transactions")],
   ["me-wallets", require("../handlers/me-wallets")],
   ["monthly-summary", require("../handlers/monthly-summary")],
+  ["notify", require("../handlers/notify")],
   ["ping", require("../handlers/ping")],
   ["purge-wallets", require("../handlers/purge-wallets")],
   ["setCategory", require("../handlers/record").setCategory],
