@@ -153,10 +153,12 @@ async function createItem(connection, uname, wallet, body) {
   const c = await pickCategory(connection, uname, f.note, f.exvalue, f.category);
   if (c.error) return c;
   const today = todayIn(wallet.timezone);
-  const r = await executeQuery(
+  // rec_id = MAX + 1 (prod cannot create sequences); two adds at the same
+  // moment clash on the primary key, so try again once.
+  const insert = () => executeQuery(
     connection,
-    `INSERT INTO recurring (uname, wallet_id, exvalue, note, category, day_of_month, notify, start_month)
-     VALUES (:uname, :wallet_id, :exvalue, :note, :category, :day, :notify, :start_month)
+    `INSERT INTO recurring (rec_id, uname, wallet_id, exvalue, note, category, day_of_month, notify, start_month)
+     VALUES ((SELECT NVL(MAX(rec_id), 0) + 1 FROM recurring), :uname, :wallet_id, :exvalue, :note, :category, :day, :notify, :start_month)
      RETURNING rec_id INTO :id`,
     {
       uname, wallet_id: wallet.wallet_id, exvalue: f.exvalue, note: c.note, category: c.category, day: f.day,
@@ -164,6 +166,13 @@ async function createItem(connection, uname, wallet, body) {
       id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
     }
   );
+  let r;
+  try {
+    r = await insert();
+  } catch (e) {
+    if (!/ORA-00001/.test(e.message)) throw e;
+    r = await insert();
+  }
   const item = await getItem(connection, uname, r.outBinds.id[0]);
   return { item: publicItem(item, today) };
 }
