@@ -1817,7 +1817,7 @@
     list.id = input.id + "Sug";
     list.setAttribute("role", "listbox");
     list.hidden = true;
-    input.after(list); // inside the label, floating over the fields below (no layout jump)
+    input.closest("label").after(list); // in the layout: never covers บันทึก / ยกเลิก
     input.setAttribute("role", "combobox");
     input.setAttribute("aria-autocomplete", "list");
     input.setAttribute("aria-controls", list.id);
@@ -1873,13 +1873,19 @@
       const my = ++seq;
       if (!state.allNotes) {
         try { await ensureNotes(); } catch { return; } // no suggestions; typing still works
-        if (my !== seq || document.activeElement !== input) return;
+        if (my !== seq || !dialog.open) return;
       }
       render();
     };
     input.addEventListener("input", open);
     input.addEventListener("focus", open);
-    input.addEventListener("blur", () => { seq++; hide(); });
+    // Not closed on blur: a tap on บันทึก / ยกเลิก must not move them under
+    // the finger. Closed when another field gets the focus or the dialog closes.
+    const dialog = input.closest("dialog");
+    dialog.addEventListener("focusin", (e) => {
+      if (e.target !== input && /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) { seq++; hide(); }
+    });
+    dialog.addEventListener("close", () => { seq++; hide(); });
     input.addEventListener("keydown", (e) => {
       if (list.hidden || !shown.length) return;
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {

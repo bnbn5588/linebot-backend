@@ -120,7 +120,9 @@ of the wallet with the same kind (รายจ่าย / รายรับ) th
 (spaces and case ignored; starts-with first, then most used), each with times
 used, last date and last amount; an empty field lists the 5 most used. Tapping
 one fills the note as last typed and, while adding with "ให้ระบบเดาให้", its
-last category. Arrow keys + Enter pick, Esc closes the list. Notes come from
+last category. Arrow keys + Enter pick, Esc closes the list. The list sits in
+the form (it pushes the fields down, never covers บันทึก / ยกเลิก) and closes when
+another field gets the focus. Notes come from
 `/api/me-notes`, loaded once per wallet. It runs inside
 LINE (LIFF) or in a desktop browser via `https://liff.line.me/<LIFF ID>`.
 
