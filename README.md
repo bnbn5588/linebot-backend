@@ -67,6 +67,7 @@ x-api-key: <API_KEY>
 | `POST` | `/api/ai-sweep` | body: optional `days`, `max` | Ask Gemini again for recent "other" records (see [Admin website](#admin-website)) |
 | `POST` | `/api/monthly-summary` | body: optional `month`, `only`, `force`, `dry_run` | Push last month's summary to every user (see [Monthly summary](#monthly-summary)) |
 | `POST` | `/api/summarySetting` | body: `uname`, `on` (true/false), optional `kind` (`monthly` default \| `weekly` \| `remind` \| `nospend`) | Monthly summary, weekly summary or reminder on/off; `nospend` = "no spending today" (see [Reminders](#reminders-and-weekly-summary)) |
+| `POST` | `/api/recurring` | body: `action` (`list` \| `undo` \| `run`); `list`/`undo`: `uname` (+ `id` = record id for `undo`); `run`: optional `only`, `dry_run` | Recurring items: the bot's list, its "ยกเลิก" button, and the daily run (see [Recurring records](#recurring-records)) |
 | `POST` | `/api/notify` | body: `job` (`remind` \| `weekly`), optional `only`, `force`, `dry_run` | Run the daily reminder or the weekly summary (cron) |
 | `GET` | `/api/ping` | – | Keep-warm check: runs `SELECT 1 FROM DUAL`, returns `db_ms` |
 | `GET` | `/api/admin-overview` | – | Admin site data (LINE ID token of an admin, see [Admin website](#admin-website)) |
@@ -90,6 +91,10 @@ their own records. `API_KEY` must never be put in the web page.
 | `GET` | `/api/me-transactions` | `wallet_id`, `month`, `q`, `type`, `category`, `note`, `limit` (≤200), `offset` | Records, newest first; `q` searches notes, `note` is an exact note |
 | `PUT` | `/api/me-transactions` | body: `id`, `exvalue`, `targetdate`, `detail` | Edit a record |
 | `DELETE` | `/api/me-transactions` | `id` | Delete a record |
+| `GET` | `/api/me-recurring` | `wallet_id` | Recurring items of the wallet (`id`, `exvalue`, `note`, `category`, `day`, `notify`, `paused`, `next_date`) and `limit` |
+| `POST` | `/api/me-recurring` | body: `wallet_id`, `exvalue`, `note`, `day` (1–31), optional `category`, `notify` | Add a recurring item (no category: picked from the note) |
+| `PUT` | `/api/me-recurring` | body: `id` and any of `exvalue`, `note`, `day`, `category`, `notify`, `paused` | Edit, pause or resume |
+| `DELETE` | `/api/me-recurring` | `id` | Delete the item (records already made stay) |
 | `GET` | `/api/me-wallets` | – | Wallets with record count and balance, plus `trash` (each with `purge_on`, `days_left`) and `trash_days` |
 | `PUT` | `/api/me-wallets` | body: `wallet_id`, `wallet_name` or `restore: true` | Rename a wallet or restore it from the trash |
 | `DELETE` | `/api/me-wallets` | `wallet_id` | Move a wallet to the trash (not the last one) |
@@ -270,6 +275,32 @@ The web app's budget card also shows "⚡ ใช้เร็วกว่าก�
 when the share of the budget used is at least 15 points ahead of the share of
 the month passed.
 
+## Recurring records
+
+`components/recurring.js`, migration 011 (table `RECURRING`, column
+`EXPENSE.recurring_id`). Users set items that repeat every month (rent,
+internet, salary) in the web app's "รายการประจำ" card: amount, note, category,
+day of the month (1–31; a shorter month uses its last day) and whether to be
+told in LINE. At most 30 items per wallet. The bot's "ประจำ" / "recurring"
+lists the current wallet's items.
+
+- Every day at 07:00 Thai time the server cron runs `scripts/recurring.sh`
+  (`0 0 * * *`, log `~/devbox/recurring.log`), which calls
+  `POST /api/recurring {"action":"run"}`. Each item due today or earlier this
+  month (the wallet's calendar) is recorded once per month
+  (`RECURRING.last_month`), dated on its day at 07:00, with
+  `EXPENSE.recurring_id` set. A missed day is caught up the next day in the same
+  month; earlier months are never back-filled.
+- A new item, a resumed one or one moved to another day starts this month if
+  its day is still ahead, otherwise next month.
+- Items with notify on are listed in one LINE message per user, with budget
+  warnings and a "ยกเลิก" button per record (valid 7 days; it deletes only
+  records the run made). Records are saved even when the push quota is at 90%;
+  only the message is skipped.
+- Records made by the run do not count as "recorded today" for the 21:00
+  reminder. The web app marks them with 🔁. Items of a trashed wallet are
+  skipped, and are deleted when the wallet is purged.
+
 ## Requirements
 
 - Node.js 26.x (pinned in `package.json` `engines`; Vercel no longer runs 20.x)
@@ -313,7 +344,7 @@ Cron entry on the server:
 
 Other server cron jobs (all times UTC): `0 2 1 * *` `monthly-summary.sh`,
 `30 20 * * *` `purge-wallets.sh`, `0 14 * * *` `notify.sh remind`,
-`0 2 * * 1` `notify.sh weekly`, `0 20 * * *` `ai-sweep.sh`.
+`0 2 * * 1` `notify.sh weekly`, `0 0 * * *` `recurring.sh`, `0 20 * * *` `ai-sweep.sh`.
 
 ## License
 

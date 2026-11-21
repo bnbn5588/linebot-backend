@@ -38,6 +38,8 @@
     txDays: null, // by_day of a one-month list (day headers)
     sumSeq: 0, // latest me-summary / me-budget request (older answers are dropped)
     budgetSeq: 0,
+    recSeq: 0,
+    rec: null, // me-recurring of the current wallet
     pendingDelete: null, // { t, at, timer, toast } while "เลิกทำ" is offered
     allNotes: null, // me-notes of the current wallet (picker), reloaded after edits
     catRange: "month", // category card: "month" | "12" (last 12 months)
@@ -384,7 +386,7 @@
   async function loadAll() {
     await flushDelete();
     updateMonthNav();
-    await Promise.all([loadSummary(), loadTx(true), loadBudgets()]);
+    await Promise.all([loadSummary(), loadTx(true), loadBudgets(), loadRecurring()]);
     requestAnimationFrame(markJump); // card heights changed
   }
 
@@ -513,6 +515,205 @@
       if (!(e instanceof AuthError)) showToast("บันทึกงบไม่สำเร็จ: " + errText(e));
     } finally {
       for (const id of ["bSave", "bRemove"]) $(id).disabled = false;
+    }
+  }
+
+  // ---------- recurring items (this wallet; recorded by the server at 07:00)
+  async function loadRecurring() {
+    const seq = ++state.recSeq;
+    const latest = () => seq === state.recSeq;
+    const done = showLoading(["recCard"], latest);
+    try {
+      const d = await api("me-recurring?" + q({ wallet_id: state.wallet.wallet_id }));
+      if (!latest()) return;
+      state.rec = d;
+    } catch (e) {
+      if (e instanceof AuthError || !latest()) return;
+      state.rec = null;
+      $("recCount").textContent = "";
+      $("recList").replaceChildren(el("li", "empty", "โหลดรายการประจำไม่สำเร็จ"));
+      return;
+    } finally {
+      done();
+    }
+    renderRecurring();
+  }
+
+  // "2026-12-01" -> "1 ธ.ค." (year added when it is not this year)
+  function shortDate(d) {
+    const [y, m, day] = d.split("-").map(Number);
+    const thisYear = nowLocal(state.wallet.timezone).date.slice(0, 4);
+    return `${day} ${MONTHS_TH[m - 1]}` + (String(y) === thisYear ? "" : ` ${String((y + 543) % 100).padStart(2, "0")}`);
+  }
+
+  function renderRecurring() {
+    const items = (state.rec && state.rec.items) || [];
+    const limit = (state.rec && state.rec.limit) || 30;
+    $("recCount").textContent = items.length ? `${items.length} รายการ` : "";
+    const full = items.length >= limit;
+    $("recAdd").disabled = full;
+    $("recAdd").textContent = full ? `ครบ ${limit} รายการแล้ว` : "＋ เพิ่มรายการประจำ";
+    if (!items.length) {
+      $("recList").replaceChildren(el("li", "empty", "ยังไม่มีรายการประจำ เช่น ค่าเช่า ค่าเน็ต เงินเดือน"));
+      return;
+    }
+    $("recList").replaceChildren(...items.map((x) => {
+      const li = el("li", x.paused ? "paused" : "");
+      const b = el("button");
+      b.type = "button";
+      b.setAttribute("aria-label", `แก้รายการประจำ ${x.note}`);
+      const when = `ทุกวันที่ ${x.day} · ` + (x.paused ? "⏸ หยุดชั่วคราว" : `ครั้งถัดไป ${shortDate(x.next_date)}`);
+      b.append(
+        el("span", "note", `${x.category.icon} ${x.note}`),
+        el("span", "amt", money(x.exvalue, true)),
+        el("span", "when", when),
+        el("span", "kind", x.notify ? x.category.label : `🔕 ${x.category.label} · ไม่แจ้ง`)
+      );
+      b.addEventListener("click", () => openRecEditor(x));
+      li.append(b);
+      return li;
+    }));
+  }
+
+  const recDlg = $("recEditor");
+  let recEditing = null; // null = new item
+  let recDeleteArmed = false;
+  (function fillDays() {
+    const sel = $("rDay");
+    for (let d = 1; d <= 31; d++) {
+      const o = el("option", "", `วันที่ ${d}`);
+      o.value = String(d);
+      sel.append(o);
+    }
+  })();
+
+  function fillRecCategory(kind, selected, isNew) {
+    const sel = $("rCategory");
+    const options = state.categories.filter((c) => c.kind === kind);
+    const items = options.map((c) => {
+      const o = el("option", "", `${c.icon} ${c.label}`);
+      o.value = c.key;
+      return o;
+    });
+    if (isNew) {
+      const auto = el("option", "", "✨ ให้ระบบเดาให้");
+      auto.value = "";
+      items.unshift(auto);
+    }
+    sel.replaceChildren(...items);
+    sel.value = options.some((c) => c.key === selected) ? selected : isNew ? "" : options[options.length - 1].key;
+  }
+  function recDayHint() {
+    $("rDayHint").hidden = Number($("rDay").value) < 29;
+  }
+  function setRecError(msg) {
+    $("recError").textContent = msg;
+    $("recError").hidden = !msg;
+  }
+  function setRecBusy(busy) {
+    for (const id of ["rSave", "rCancel", "rPause", "rDelete"]) $(id).disabled = busy;
+  }
+  function armDelete(on) {
+    recDeleteArmed = on;
+    $("rDelete").textContent = on ? "กดอีกครั้งเพื่อลบ" : "ลบ";
+  }
+
+  function openRecEditor(x) {
+    recEditing = x || null;
+    const isNew = !x;
+    $("recTitle").textContent = isNew ? "เพิ่มรายการประจำ" : "แก้ไขรายการประจำ";
+    const sign = isNew || x.exvalue < 0 ? "-" : "+";
+    recDlg.querySelector(`input[name=rSign][value="${sign}"]`).checked = true;
+    $("rAmount").value = isNew ? "" : String(Math.abs(x.exvalue));
+    $("rNote").value = isNew ? "" : x.note;
+    fillRecCategory(sign === "-" ? "expense" : "income", isNew ? "" : x.category.key, isNew);
+    $("rDay").value = String(isNew ? Number(nowLocal(state.wallet.timezone).date.slice(8, 10)) : x.day);
+    recDayHint();
+    $("rNotify").checked = isNew ? true : x.notify;
+    $("rManage").hidden = isNew;
+    if (!isNew) $("rPause").textContent = x.paused ? "▶️ เปิดต่อ" : "⏸ หยุดชั่วคราว";
+    $("rNext").hidden = isNew;
+    if (!isNew) $("rNext").textContent = x.paused ? "หยุดชั่วคราวอยู่ จะไม่บันทึกจนกว่าจะเปิดต่อ" : `ครั้งถัดไป ${shortDate(x.next_date)}`;
+    armDelete(false);
+    setRecError("");
+    setRecBusy(false);
+    if (recDlg.showModal) recDlg.showModal(); else recDlg.setAttribute("open", "");
+    if (isNew) $("rAmount").focus();
+  }
+  function closeRecEditor() {
+    recEditing = null;
+    if (recDlg.close) recDlg.close(); else recDlg.removeAttribute("open");
+  }
+  function recErrText(e) {
+    const m = (e && e.message) || "";
+    if (e && e.body && e.body.code === "LIMIT") return "กระเป๋านี้มีรายการประจำครบแล้ว ลบรายการที่ไม่ใช้ก่อน";
+    if (/^Field 'note' is too long/.test(m)) return NOTE_TOO_LONG;
+    if (/^Field 'note'/.test(m)) return "ใส่โน้ตก่อน";
+    if (/^Field 'day'/.test(m)) return "เลือกวันที่ 1–31";
+    return errText(e, "บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง");
+  }
+
+  async function saveRec(ev) {
+    ev.preventDefault();
+    const sign = recDlg.querySelector("input[name=rSign]:checked").value;
+    const raw = $("rAmount").value.trim().replace(/^[+-]/, "");
+    const amount = Number(raw.replace(/,/g, ""));
+    if (!/^(\d{1,3}(,\d{3})+|\d+)(\.\d{1,2})?$/.test(raw) || !(amount > 0) || amount >= 10000000) {
+      setRecError("จำนวนเงินไม่ถูกต้อง ใส่ตัวเลขไม่เกิน 2 ตำแหน่งทศนิยม และน้อยกว่า 10,000,000");
+      $("rAmount").focus();
+      return;
+    }
+    const note = $("rNote").value.replace(/\s+/g, " ").trim();
+    if (!note) { setRecError("ใส่โน้ตก่อน"); $("rNote").focus(); return; }
+    if (noteTooLong(note)) { setRecError(NOTE_TOO_LONG); $("rNote").focus(); return; }
+    const body = { exvalue: sign + raw, note, day: Number($("rDay").value), notify: $("rNotify").checked };
+    const cat = $("rCategory").value;
+    if (cat) body.category = cat;
+    const editing = recEditing;
+    setRecBusy(true);
+    try {
+      const r = editing
+        ? await api("me-recurring", { method: "PUT", body: { id: editing.id, ...body } })
+        : await api("me-recurring", { method: "POST", body: { wallet_id: state.wallet.wallet_id, ...body } });
+      closeRecEditor();
+      showToast(`${editing ? "บันทึก" : "เพิ่ม"}รายการประจำแล้ว` + (r.paused ? "" : ` · ครั้งถัดไป ${shortDate(r.next_date)}`));
+      await loadRecurring();
+    } catch (e) {
+      if (!(e instanceof AuthError)) setRecError(recErrText(e));
+      setRecBusy(false);
+    }
+  }
+
+  async function toggleRecPause() {
+    const x = recEditing;
+    if (!x) return;
+    setRecBusy(true);
+    try {
+      const r = await api("me-recurring", { method: "PUT", body: { id: x.id, paused: !x.paused } });
+      closeRecEditor();
+      showToast(r.paused ? `หยุด ${x.note} ไว้ก่อนแล้ว` : `เปิด ${x.note} ต่อแล้ว · ครั้งถัดไป ${shortDate(r.next_date)}`);
+      await loadRecurring();
+    } catch (e) {
+      if (!(e instanceof AuthError)) setRecError(recErrText(e));
+      setRecBusy(false);
+    }
+  }
+
+  async function deleteRec() {
+    const x = recEditing;
+    if (!x) return;
+    if (!recDeleteArmed) { armDelete(true); return; }
+    setRecBusy(true);
+    try {
+      await api("me-recurring?" + q({ id: x.id }), { method: "DELETE" });
+      closeRecEditor();
+      showToast(`ลบรายการประจำ ${x.note} แล้ว (รายการที่บันทึกไปแล้วยังอยู่)`);
+      await loadRecurring();
+    } catch (e) {
+      if (e instanceof AuthError) return;
+      if (e.status === 404) { closeRecEditor(); await loadRecurring(); return; }
+      setRecError(recErrText(e));
+      setRecBusy(false);
     }
   }
 
@@ -1109,7 +1310,7 @@
           el("span", "note", t.note || "-"),
           el("span", "amt", money(t.exvalue, true)),
           el("span", "when", byDay ? t.datetime.slice(11, 16) : whenLabel(t.datetime)),
-          el("span", "kind", t.category ? `${t.category.icon} ${t.category.label}` : (t.exvalue >= 0 ? "รายรับ" : "รายจ่าย"))
+          el("span", "kind", (t.recurring ? "🔁 " : "") + (t.category ? `${t.category.icon} ${t.category.label}` : (t.exvalue >= 0 ? "รายรับ" : "รายจ่าย")))
         );
         b.addEventListener("click", () => openEditor(t));
         li.append(b);
@@ -1725,6 +1926,18 @@
     setBudgetEdit(!state.budgetOpen);
     if (state.budgetOpen) $("bCategory").focus();
   });
+
+  $("recAdd").addEventListener("click", () => openRecEditor(null));
+  $("recForm").addEventListener("submit", saveRec);
+  $("rCancel").addEventListener("click", closeRecEditor);
+  $("rPause").addEventListener("click", toggleRecPause);
+  $("rDelete").addEventListener("click", deleteRec);
+  $("rDay").addEventListener("change", recDayHint);
+  for (const r of recDlg.querySelectorAll("input[name=rSign]")) {
+    r.addEventListener("change", (e) => {
+      if (e.target.checked) fillRecCategory(e.target.value === "-" ? "expense" : "income", $("rCategory").value, !recEditing);
+    });
+  }
 
   $("walletSelect").addEventListener("change", (e) => {
     state.wallet = state.wallets.find((w) => String(w.wallet_id) === e.target.value) || state.wallet;

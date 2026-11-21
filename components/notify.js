@@ -107,7 +107,7 @@ async function sendReminders(connection, { only = null, dryRun = false, now = ne
       const since = await executeQuery(
         connection,
         `SELECT COUNT(*) FROM expense e JOIN wallet w ON w.uname = e.uname AND w.wallet_id = e.wallet_id AND w.deleted_at IS NULL
-          WHERE e.uname = :uname AND e.fulldate >= TO_DATE(:last, 'YYYY-MM-DD')`,
+          WHERE e.uname = :uname AND e.recurring_id IS NULL AND e.fulldate >= TO_DATE(:last, 'YYYY-MM-DD')`,
         { uname, last }
       );
       if (since.rows[0][0] > 0) {
@@ -115,11 +115,12 @@ async function sendReminders(connection, { only = null, dryRun = false, now = ne
         if (!dryRun) await executeQuery(connection, "UPDATE users SET remind_streak = 0 WHERE uname = :uname", { uname });
       }
     }
-    // any record dated today, in any of the user's active wallets
+    // any record dated today, in any of the user's active wallets (not the
+    // ones the recurring run made: those are not the user writing things down)
     const rec = await executeQuery(
       connection,
       `SELECT COUNT(*) FROM expense e JOIN wallet w ON w.uname = e.uname AND w.wallet_id = e.wallet_id AND w.deleted_at IS NULL
-        WHERE e.uname = :uname AND e.fulldate >= TO_DATE(:today, 'YYYY-MM-DD') AND e.fulldate < TO_DATE(:today, 'YYYY-MM-DD') + 1`,
+        WHERE e.uname = :uname AND e.recurring_id IS NULL AND e.fulldate >= TO_DATE(:today, 'YYYY-MM-DD') AND e.fulldate < TO_DATE(:today, 'YYYY-MM-DD') + 1`,
       { uname, today }
     );
     if (rec.rows[0][0] > 0) {

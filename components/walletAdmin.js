@@ -120,7 +120,8 @@ async function restoreWallet(connection, uname, walletId) {
   return { wallet_id: walletId, wallet_name: r.rows[0][0], timezone: r.rows[0][1] };
 }
 
-// Deletes one trashed wallet for good: its records, budgets and the wallet,
+// Deletes one trashed wallet for good: its records, budgets, recurring items
+// and the wallet,
 // in one transaction, then forgets remembered categories of notes that no
 // longer appear in any of the user's records.
 async function purgeWallet(connection, uname, walletId) {
@@ -138,6 +139,7 @@ async function purgeWallet(connection, uname, walletId) {
     }
     const del = await executeQuery(connection, "DELETE FROM expense WHERE uname = :uname AND wallet_id = :wallet_id", { uname, wallet_id: walletId }, opts);
     await executeQuery(connection, "DELETE FROM budget WHERE uname = :uname AND wallet_id = :wallet_id", { uname, wallet_id: walletId }, opts);
+    await executeQuery(connection, "DELETE FROM recurring WHERE uname = :uname AND wallet_id = :wallet_id", { uname, wallet_id: walletId }, opts);
     await executeQuery(
       connection,
       `DELETE FROM category_memory m WHERE m.uname = :uname AND NOT EXISTS

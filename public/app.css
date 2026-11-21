@@ -356,3 +356,11 @@ html { scroll-padding-top: 64px; }
 .wm-list > li.wm-sec { padding: 16px 2px 6px; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
 .wm-list > li.trashed .n, .wm-list > li.trashed .v { color: var(--text-secondary); }
 .btn.danger.solid { background: var(--danger); border-color: var(--danger); color: #fff; }
+
+/* recurring card + editor */
+.rec li.paused .note, .rec li.paused .amt { color: var(--text-muted); }
+.check { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 15px; cursor: pointer; }
+.check input { width: 20px; height: 20px; margin: 0; }
+.rec-hint { margin: -4px 0 10px; font-size: 12px; }
+.rec-manage { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 4px 0 12px; }
+.rec-manage[hidden] { display: none; }
