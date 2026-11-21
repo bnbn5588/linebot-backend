@@ -144,15 +144,28 @@ async function pickCategory(connection, uname, note, value, chosen) {
 async function createItem(connection, uname, wallet, body) {
   const f = readItem(body);
   if (f.error) return f;
-  const count = await executeQuery(
-    connection,
-    "SELECT COUNT(*) FROM recurring WHERE uname = :uname AND wallet_id = :wallet_id",
-    { uname, wallet_id: wallet.wallet_id }
-  );
-  if (count.rows[0][0] >= MAX_PER_WALLET) return { error: "LIMIT", limit: MAX_PER_WALLET };
   const c = await pickCategory(connection, uname, f.note, f.exvalue, f.category);
   if (c.error) return c;
   const today = todayIn(wallet.timezone);
+  const opts = { autoCommit: false };
+  // Lock the wallet row until the insert commits: two adds at the same moment
+  // (separate lambdas) count one after the other and never pass the limit.
+  await executeQuery(
+    connection,
+    "SELECT wallet_id FROM wallet WHERE uname = :uname AND wallet_id = :wallet_id FOR UPDATE",
+    { uname, wallet_id: wallet.wallet_id },
+    opts
+  );
+  const count = await executeQuery(
+    connection,
+    "SELECT COUNT(*) FROM recurring WHERE uname = :uname AND wallet_id = :wallet_id",
+    { uname, wallet_id: wallet.wallet_id },
+    opts
+  );
+  if (count.rows[0][0] >= MAX_PER_WALLET) {
+    await connection.rollback();
+    return { error: "LIMIT", limit: MAX_PER_WALLET };
+  }
   // rec_id = MAX + 1 (prod cannot create sequences); two adds at the same
   // moment clash on the primary key, so try again once.
   const insert = () => executeQuery(
@@ -164,14 +177,21 @@ async function createItem(connection, uname, wallet, body) {
       uname, wallet_id: wallet.wallet_id, exvalue: f.exvalue, note: c.note, category: c.category, day: f.day,
       notify: f.notify === false ? 0 : 1, start_month: firstMonth(today, f.day),
       id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
-    }
+    },
+    opts
   );
   let r;
   try {
-    r = await insert();
+    try {
+      r = await insert();
+    } catch (e) {
+      if (!/ORA-00001/.test(e.message)) throw e;
+      r = await insert();
+    }
+    await connection.commit();
   } catch (e) {
-    if (!/ORA-00001/.test(e.message)) throw e;
-    r = await insert();
+    try { await connection.rollback(); } catch { /* ignore */ }
+    throw e;
   }
   const item = await getItem(connection, uname, r.outBinds.id[0]);
   return { item: publicItem(item, today) };
@@ -260,11 +280,30 @@ function budgetLine(b) {
 
 // One text message for a user's records of the day (notify = 1 only).
 // done: [{ trans_id, note, exvalue, wallet_name, budget }]
+const UNDO_BUTTONS = 12; // LINE allows 13 quick replies; the last one opens the web
+const TEXT_MAX = 4500; // LINE text limit is 5000
 function runMessage(done, issuedAt = Date.now()) {
-  const lines = done.map((d) => `• ${clip(d.note, 60)} ${fmtMoney(d.exvalue)} (กระเป๋า ${clip(d.wallet_name || String(d.wallet_id), 30)})`);
+  const all = done.map((d) => `• ${clip(d.note, 60)} ${fmtMoney(d.exvalue)} (กระเป๋า ${clip(d.wallet_name || String(d.wallet_id), 30)})`);
   const warns = done.filter((d) => d.budget).map((d) => budgetLine(d.budget));
   const t = issuedAt.toString(36); // ms, as the bot's other expiring buttons
-  const items = done.slice(0, 12).map((d) => ({
+  const foot = [`กด "ยกเลิก" ได้ภายใน ${UNDO_DAYS} วัน ถ้ารายการไหนไม่ได้จ่ายจริง`];
+  if (done.length > UNDO_BUTTONS) {
+    foot.push(`มีปุ่มยกเลิกให้ ${UNDO_BUTTONS} รายการแรก รายการที่เหลือแก้หรือลบได้ในเว็บ`);
+  }
+  // whole lines only: when they do not fit, "…และอีก N รายการ" instead of a cut line
+  const head = "🔁 บันทึกรายการประจำให้แล้ว";
+  const fixed = [head, ...warns, "", ...foot].join("\n").length + 40;
+  const lines = [];
+  let used = fixed;
+  for (const [i, line] of all.entries()) {
+    if (used + line.length + 1 > TEXT_MAX) {
+      lines.push(`…และอีก ${all.length - i} รายการ (ดูในเว็บ)`);
+      break;
+    }
+    lines.push(line);
+    used += line.length + 1;
+  }
+  const items = done.slice(0, UNDO_BUTTONS).map((d) => ({
     type: "action",
     action: {
       type: "postback",
@@ -276,8 +315,7 @@ function runMessage(done, issuedAt = Date.now()) {
   items.push({ type: "action", action: { type: "uri", label: "🌐 เปิดเว็บ", uri: WEB_APP_URL } });
   return {
     type: "text",
-    text: clip(["🔁 บันทึกรายการประจำให้แล้ว", ...lines, ...warns].join("\n"), 4500) +
-      `\n\nกด "ยกเลิก" ได้ภายใน ${UNDO_DAYS} วัน ถ้ารายการไหนไม่ได้จ่ายจริง`,
+    text: clip([head, ...lines, ...warns].join("\n"), TEXT_MAX) + "\n\n" + foot.join("\n"),
     quickReply: { items },
   };
 }
@@ -301,6 +339,10 @@ async function runDue(connection, { only = null, dryRun = false, now = new Date(
     if (!ym) continue;
     out.due++;
     const date = dueDate(ym, x.day_of_month);
+    // 07:00 wallet time, or now when the run is earlier than 07:00 there
+    // (wallets east of Thai time): a record is never in the future
+    const local = moment.tz(now, zoneOr(tz));
+    const time = date === local.format("YYYY-MM-DD") && local.format("HH:mm:ss") < RUN_TIME ? local.format("HH:mm:ss") : RUN_TIME;
     const rec = { rec_id: x.rec_id, wallet_id: walletId, wallet_name: walletName, note: x.note, exvalue: x.exvalue, date };
     if (dryRun) {
       if (x.notify) tell.set(uname, [...(tell.get(uname) || []), { ...rec, trans_id: 0 }]);
@@ -323,7 +365,7 @@ async function runDue(connection, { only = null, dryRun = false, now = new Date(
          VALUES (:uname, :exvalue, TO_DATE(:d, 'YYYY-MM-DD HH24:MI:SS'), :note, :wallet_id, :category, :rec_id)
          RETURNING trans_id INTO :tid`,
         {
-          uname, exvalue: x.exvalue, d: `${date} ${RUN_TIME}`, note: x.note, wallet_id: walletId, category, rec_id: x.rec_id,
+          uname, exvalue: x.exvalue, d: `${date} ${time}`, note: x.note, wallet_id: walletId, category, rec_id: x.rec_id,
           tid: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
         },
         opts

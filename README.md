@@ -287,21 +287,25 @@ the month passed.
 `EXPENSE.recurring_id`). Users set items that repeat every month (rent,
 internet, salary) in the web app's "รายการประจำ" card: amount, note, category,
 day of the month (1–31; a shorter month uses its last day) and whether to be
-told in LINE. At most 30 items per wallet. The bot's "ประจำ" / "recurring"
+told in LINE. At most 30 items per wallet (adds lock the wallet row, so two
+at once cannot pass the limit). The bot's "ประจำ" / "recurring"
 lists the current wallet's items.
 
 - Every day at 07:00 Thai time the server cron runs `scripts/recurring.sh`
   (`0 0 * * *`, log `~/devbox/recurring.log`), which calls
   `POST /api/recurring {"action":"run"}`. Each item due today or earlier this
   month (the wallet's calendar) is recorded once per month
-  (`RECURRING.last_month`), dated on its day at 07:00, with
+  (`RECURRING.last_month`), dated on its day at 07:00 wallet time (or the
+  current time when it is not 07:00 there yet, so never in the future), with
   `EXPENSE.recurring_id` set. A missed day is caught up the next day in the same
   month; earlier months are never back-filled.
 - A new item, a resumed one or one moved to another day starts this month if
   its day is still ahead, otherwise next month.
 - Items with notify on are listed in one LINE message per user, with budget
   warnings and a "ยกเลิก" button per record (valid 7 days; it deletes only
-  records the run made). Records are saved even when the push quota is at 90%;
+  records the run made). LINE allows 13 buttons: the first 12 records get one
+  (the message says the rest can be changed in the web app), plus "เปิดเว็บ".
+  A list too long for one message ends with "…และอีก N รายการ" at a whole line. Records are saved even when the push quota is at 90%;
   only the message is skipped.
 - Records made by the run do not count as "recorded today" for the 21:00
   reminder. The web app marks them with 🔁. Items of a trashed wallet are
