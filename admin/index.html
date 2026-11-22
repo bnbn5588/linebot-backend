@@ -46,9 +46,10 @@
 
         <section class="card span2">
           <div class="card-head"><h2>ผู้ใช้</h2><span class="muted">จำนวนและเวลาใช้งานเท่านั้น ไม่แสดงยอดเงิน</span></div>
+          <p class="muted help">ใช้ฟีเจอร์: 📊 ตั้งงบ · 🔁 รายการประจำ (จำนวนที่ไม่ได้หยุด) · 📝 เปิดเตือนจด · 📅 เปิดสรุปรายสัปดาห์ (นับเฉพาะกระเป๋าที่ไม่ได้อยู่ในถังขยะ)</p>
           <div class="scroll">
             <table class="t users">
-              <thead><tr><th>ผู้ใช้</th><th>กระเป๋า</th><th>รายการ</th><th>30 วัน</th><th>เริ่มใช้</th><th>รายการล่าสุด</th></tr></thead>
+              <thead><tr><th>ผู้ใช้</th><th>กระเป๋า</th><th>รายการ</th><th>30 วัน</th><th>เริ่มใช้</th><th>รายการล่าสุด</th><th>ใช้ฟีเจอร์</th></tr></thead>
               <tbody id="userTable"></tbody>
             </table>
           </div>
@@ -165,6 +166,20 @@
           <dl class="kv" id="line"></dl>
         </section>
 
+        <section class="card span2" id="jobsCard">
+          <div class="card-head"><h2>การแจ้งเตือนและงานอัตโนมัติ</h2><span class="muted" id="jobsNow"></span></div>
+          <p class="muted help">นับจำนวนเท่านั้น เวลาไทย · "ค้าง" = ควรทำไปแล้ว (เลยเวลา cron มา 1 ชม.) แต่ยังไม่ทำ อาจเพราะ cron ไม่ทำงาน หรือโควต้า push ใช้ถึง 90% แล้ว (งานส่งข้อความหยุดเอง) · กระเป๋าที่ตั้งเขตเวลาอื่นอาจคลาดได้ 1 วัน</p>
+          <ul class="alerts" id="jobsAlerts" role="status"></ul>
+          <div class="scroll">
+            <table class="t jobs">
+              <thead><tr><th>งาน</th><th>เวลา</th><th>ผู้ใช้ / รายการ</th><th>รอบล่าสุด</th><th>สถานะ</th></tr></thead>
+              <tbody id="jobsTable"></tbody>
+            </table>
+          </div>
+          <div class="card-head sub"><h2>คาดการณ์ข้อความ push เดือนนี้</h2><span class="muted">ค่าสูงสุดที่เป็นไปได้</span></div>
+          <div class="meter" id="pushMeter"></div>
+          <p class="muted help" id="pushNote"></p>
+        </section>
         <section class="card span2">
           <div class="card-head"><h2>โควต้าและค่าใช้จ่ายภายนอก</h2></div>
           <ul class="links">

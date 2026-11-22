@@ -24,15 +24,6 @@
     return e;
   };
   const TH_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
-  // Monthly summary counts (null before migration 005)
-  function summaryRows(sm) {
-    if (!sm) return [["สรุปรายเดือน", "–"]];
-    const label = `${TH_MONTHS[Number(sm.month.slice(5, 7)) - 1]} ${sm.month.slice(0, 4)}`;
-    return [
-      [`สรุปรายเดือน (${label})`, `ส่งแล้ว ${num.format(sm.sent)} คน`],
-      ["ปิดรับสรุป", `${num.format(sm.off)} จาก ${num.format(sm.users)} คน`],
-    ];
-  }
   function bytes(n) {
     if (n === null || n === undefined) return "–";
     const u = ["B", "KB", "MB", "GB", "TB"];
@@ -183,7 +174,7 @@
     // LINE
     const line = data.line;
     if (!line.configured) {
-      kv($("line"), [["สถานะ", "ยังไม่ได้ตั้ง LB_KEY ใน Vercel"], ...summaryRows(data.summary)]);
+      kv($("line"), [["สถานะ", "ยังไม่ได้ตั้ง LB_KEY ใน Vercel"]]);
     } else {
       if (line.bot) {
         $("botName").textContent = line.bot.name + " — Admin";
@@ -198,7 +189,6 @@
         ["บล็อก", f && f.status === "ready" ? num.format(f.blocks) : "–"],
       ];
       if (line.errors && line.errors.length) rows.push(["ข้อผิดพลาด", line.errors.join(", ")]);
-      rows.push(...summaryRows(data.summary));
       kv($("line"), rows);
     }
 
@@ -215,15 +205,117 @@
       if (u.name) txt.append(idEl);
       box.append(txt);
       td.append(box);
-      tr.append(td, el("td", "", num.format(u.wallets)), el("td", "", num.format(u.records)), el("td", "", num.format(u.records_30d)), el("td", "", u.first_date || "–"), el("td", "", u.last_date || "–"));
+      tr.append(td, el("td", "", num.format(u.wallets)), el("td", "", num.format(u.records)), el("td", "", num.format(u.records_30d)), el("td", "", u.first_date || "–"), el("td", "", u.last_date || "–"), featCell(u.features));
       return tr;
     }));
+
+    renderJobs(data.jobs, data.line);
 
     $("monthTable").replaceChildren(...[...data.monthly].reverse().map((m) => {
       const tr = el("tr");
       tr.append(el("td", "", m.month), el("td", "", num.format(m.records)), el("td", "", num.format(m.users)));
       return tr;
     }));
+  }
+
+  // ---------- users: features in use
+  function featCell(f) {
+    const td = el("td", "feat");
+    if (!f) { td.textContent = "–"; return td; }
+    const parts = [];
+    if (f.budget) parts.push(["📊", "ตั้งงบ"]);
+    if (f.recurring) parts.push(["🔁" + f.recurring, `รายการประจำ ${f.recurring} รายการ`]);
+    if (f.remind) parts.push(["📝", "เปิดเตือนจด"]);
+    if (f.weekly) parts.push(["📅", "เปิดสรุปรายสัปดาห์"]);
+    td.textContent = parts.length ? parts.map((p) => p[0]).join(" ") : "–";
+    td.title = parts.map((p) => p[1]).join(" · ") || "ยังไม่ได้ใช้";
+    td.setAttribute("aria-label", td.title);
+    return td;
+  }
+
+  // ---------- notifications and scheduled jobs (counts only)
+  const thDay = (d) => (d ? `${Number(d.slice(8, 10))} ${TH_MONTHS[Number(d.slice(5, 7)) - 1]}` : "–");
+  const thMonth = (m) => `${TH_MONTHS[Number(m.slice(5, 7)) - 1]} ${m.slice(0, 4)}`;
+  function renderJobs(j, line) {
+    const body = $("jobsTable"), alerts = [];
+    if (!j) { body.replaceChildren(); $("jobsAlerts").replaceChildren(); return; }
+    $("jobsNow").textContent = `ณ ${j.now_th}`;
+    const status = (part, unit) => {
+      if (!part) return el("span", "badge", "ยังไม่มีตาราง (migration)");
+      return part.late ? el("span", "badge bad", `ค้าง ${num.format(part.late)} ${unit}`) : el("span", "badge good", "ปกติ");
+    };
+    const cell = (main, sub) => {
+      const td = el("td", "", main);
+      if (sub) td.append(el("span", "sub", sub));
+      return td;
+    };
+    const row = (name, when, who, last, part, unit) => {
+      const tr = el("tr");
+      const st = el("td");
+      st.append(status(part, unit));
+      tr.append(el("td", "", name), el("td", "", when), who, last, st);
+      return tr;
+    };
+    const rm = j.remind, wk = j.weekly, mo = j.monthly, rc = j.recurring, tr = j.trash;
+    const na = () => cell("–");
+    const rows = [
+      row("📝 เตือนจด", "ทุกวัน 21:00",
+        rm ? cell(`เปิด ${num.format(rm.on)} คน`, rm.paused ? `หยุดชั่วคราว ${num.format(rm.paused)} คน (ไม่ได้จด 7 วัน)` : "") : na(),
+        rm ? cell(rm.last_day ? `${thDay(rm.last_day)} · ส่ง ${num.format(rm.last_sent)} คน` : "ยังไม่เคยส่ง", "ส่งเฉพาะคนที่วันนั้นยังไม่ได้จด") : na(),
+        rm, "คน"),
+      row("📅 สรุปรายสัปดาห์", "จันทร์ 09:00",
+        wk ? cell(`เปิด ${num.format(wk.on)} คน`) : na(),
+        wk ? cell(`สัปดาห์ ${thDay(wk.week)} · ส่ง ${num.format(wk.sent)} คน`, "ไม่ส่งถ้าสัปดาห์นั้นไม่มีรายการ") : na(),
+        wk, "คน"),
+      row("🗓 สรุปรายเดือน", "วันที่ 1 09:00",
+        mo ? cell(`รับ ${num.format(mo.on)} จาก ${num.format(mo.users)} คน`) : na(),
+        mo ? cell(`${thMonth(mo.month)} · ส่ง ${num.format(mo.sent)} คน`, "ไม่ส่งถ้าเดือนนั้นไม่มีรายการ") : na(),
+        mo, "คน"),
+      row("🔁 รายการประจำ", "ทุกวัน 07:00",
+        rc ? cell(`${num.format(rc.active)} รายการ (${num.format(rc.users)} คน)`, `หยุด ${num.format(rc.paused)} · แจ้งใน LINE ${num.format(rc.notify)}`) : na(),
+        rc ? cell(`เดือนนี้บันทึกแล้ว ${num.format(rc.recorded)}`, `ยังไม่ถึงวัน ${num.format(rc.due_left)}`) : na(),
+        rc, "รายการ"),
+      row("🗑 ลบกระเป๋าถาวร", "ทุกวัน 03:30",
+        tr ? cell(`ในถังขยะ ${num.format(tr.wallets)} ใบ`) : na(),
+        tr ? cell(tr.next_purge ? `ครบ 30 วันใบแรก ${thDay(tr.next_purge)}` : "ไม่มี") : na(),
+        tr, "ใบ"),
+    ];
+    body.replaceChildren(...rows);
+    if (rm && rm.late) alerts.push(["bad", `เตือนจดรอบ ${thDay(rm.check_day)} ยังไม่ได้ส่ง ${num.format(rm.late)} คน`]);
+    if (wk && wk.late) alerts.push(["bad", `สรุปรายสัปดาห์ (สัปดาห์ ${thDay(wk.week)}) ยังไม่ได้ส่ง ${num.format(wk.late)} คน`]);
+    if (mo && mo.late) alerts.push(["bad", `สรุปรายเดือน ${thMonth(mo.month)} ยังไม่ได้ส่ง ${num.format(mo.late)} คน`]);
+    if (rc && rc.late) alerts.push(["bad", `รายการประจำถึงวันแล้วแต่ยังไม่ถูกบันทึก ${num.format(rc.late)} รายการ`]);
+    if (tr && tr.late) alerts.push(["bad", `กระเป๋าเกิน 30 วันในถังขยะแต่ยังไม่ถูกลบ ${num.format(tr.late)} ใบ`]);
+
+    // push forecast vs the LINE monthly quota
+    const f = j.push_forecast, meter = $("pushMeter");
+    const used = line && line.configured ? line.consumption : null;
+    const limit = line && line.quota && line.quota.type === "limited" ? line.quota.value : null;
+    const parts = `เตือนจด ${num.format(f.reminders)} · สรุปรายสัปดาห์ ${num.format(f.weekly)} · รายการประจำ ${num.format(f.recurring)}`;
+    if (used === null || used === undefined) {
+      meter.replaceChildren(el("div", "muted", `อ่านยอดที่ใช้ไปจาก LINE ไม่ได้ · ที่เหลือของเดือนสูงสุด ${num.format(f.total)} ข้อความ`));
+      $("pushNote").textContent = parts;
+    } else {
+      const total = used + f.total;
+      if (limit) {
+        const pct = (total / limit) * 100;
+        const bar = el("div", "bar");
+        const fill = el("div", "fill " + (pct >= 100 ? "bad" : pct >= 90 ? "warn" : ""));
+        fill.style.width = Math.min(Math.max(pct, 0.5), 100) + "%";
+        const now = el("span", "now");
+        now.style.width = (total ? (used / total) * 100 : 0) + "%";
+        fill.append(now);
+        bar.append(fill);
+        const cap = el("div", "cap");
+        cap.append(el("span", "", `ใช้แล้ว ${num.format(used)} + อีกสูงสุด ${num.format(f.total)} = ${num.format(total)} (${pct.toFixed(0)}%)`), el("span", "", `จาก ${num.format(limit)}`));
+        meter.replaceChildren(bar, cap);
+        if (pct >= 90) alerts.push([pct >= 100 ? "bad" : "warn", `คาดว่าข้อความ push เดือนนี้จะถึง ${pct.toFixed(0)}% ของโควต้า งานส่งข้อความจะหยุดเองที่ 90%`]);
+      } else {
+        meter.replaceChildren(el("div", "muted", `ใช้แล้ว ${num.format(used)} + อีกสูงสุด ${num.format(f.total)} = ${num.format(total)} ข้อความ (โควต้าไม่จำกัด)`));
+      }
+      $("pushNote").textContent = `ที่เหลือของเดือน: ${parts} · สรุปรายเดือนนับเข้าเดือนถัดไป`;
+    }
+    $("jobsAlerts").replaceChildren(...alerts.map(([cls, t]) => el("li", cls, "⚠️ " + t)));
   }
 
   // Bar charts: one series each (no legend); hover a day for details.

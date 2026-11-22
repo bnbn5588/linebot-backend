@@ -11,6 +11,7 @@ const { TH_TODAY, TH_TODAY_START_UTC, recordsInThaiTime } = require("../componen
 const { DAILY_CAP } = require("../components/aiFill");
 const { AI_MIN_CONFIDENCE } = require("../components/categories");
 const { lastMonth } = require("../components/monthlySummary");
+const { jobsStatus, featureFlags } = require("../components/adminJobs");
 
 // GET /api/admin-overview — data for the admin website (a separate site/domain).
 // Auth: LINE ID token of an admin (components/adminAuth.js), CORS limited to
@@ -197,6 +198,10 @@ module.exports = async (req, res) => {
         if (!/ORA-00904/.test(e.message)) throw e; // columns not there yet
       }
 
+      // Scheduled jobs (notifications, recurring, wallet purge) + features per user
+      const jobs = await jobsStatus(connection);
+      const flags = await featureFlags(connection);
+
       const userIds = users.map((u) => u[0]);
       const line = await lineInfo(userIds);
 
@@ -223,6 +228,7 @@ module.exports = async (req, res) => {
             records_30d: u[3],
             first_date: u[4],
             last_date: u[5],
+            features: flags[u[0]] || { budget: false, recurring: 0, remind: false, weekly: false },
           })),
           daily: daily.map((d) => ({ date: d[0], records: d[1], users: d[2] })),
           monthly: monthly.map((m) => ({ month: m[0], records: m[1], users: m[2] })),
@@ -246,6 +252,7 @@ module.exports = async (req, res) => {
           },
           line: { ...line, names: undefined },
           summary, // { month, sent, off, users } or null
+          jobs, // components/adminJobs.js jobsStatus()
           ai: {
             enabled: ai.enabled(),
             model: ai.model(),

@@ -173,6 +173,20 @@ health, LINE OA message quota and followers (needs `LB_KEY`, the bot's channel
 access token, in the backend's Vercel env), and links to the Vercel, Firebase,
 Google Cloud, OCI and LINE consoles.
 
+- Card "การแจ้งเตือนและงานอัตโนมัติ" (`jobs` in `/api/admin-overview`,
+  `components/adminJobs.js`, counts only): for the 21:00 reminder, the weekly
+  and monthly summaries, recurring records and the wallet purge — how many
+  users have it on, the last run, and a "ค้าง" (late) count of users / items /
+  wallets a run should already have handled (1 hour after its cron time, Thai
+  time) but did not: the cron did not run, or the push quota reached 90%.
+  Late counts are listed as warnings at the top of the card. Below: the
+  highest number of push messages still to come this month (reminders every
+  evening, weekly cards on Mondays, one recurring message per user and due
+  day) added to the month's usage, against the LINE quota. The monthly summary
+  rows moved here from the LINE OA card.
+- Users table, column "ใช้ฟีเจอร์" (`features` per user): 📊 has a budget,
+  🔁N active recurring items, 📝 reminder on, 📅 weekly summary on (wallets in
+  the trash not counted).
 - API: `GET /api/admin-overview` — LINE ID token of an admin. Admins are listed
   in `DEFAULT_ADMIN_USER_IDS` (`components/adminAuth.js`) or the `ADMIN_USER_IDS`
   env var; a signed-in non-admin sees their own LINE userId so it can be added.
