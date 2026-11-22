@@ -26,6 +26,7 @@ const routes = new Map([
   ["manageWallet", require("../handlers/manageWallet")],
   ["me-memory", require("../handlers/me-memory")],
   ["me-notes", require("../handlers/me-notes")],
+  ["me-notify", require("../handlers/me-notify")],
   ["me-recurring", require("../handlers/me-recurring")],
   ["me-summary", require("../handlers/me-summary")],
   ["me-transactions", require("../handlers/me-transactions")],

@@ -22,6 +22,7 @@
               <select id="walletSelect"></select>
             </label>
             <button type="button" class="btn icon wallet-gear" id="walletManage" aria-label="จัดการกระเป๋า" aria-haspopup="dialog">⚙</button>
+            <button type="button" class="btn icon wallet-gear" id="notifyOpen" aria-label="การแจ้งเตือน" aria-haspopup="dialog">🔔</button>
             <div class="wallet-total">คงเหลือทั้งหมด <span class="num" id="tAll">–</span></div>
           </div>
         </div>
@@ -259,6 +260,42 @@
     </div>
     <p class="muted wm-help">เปลี่ยนชื่อ หรือลบกระเป๋าที่ไม่ใช้แล้ว กระเป๋าที่ลบจะอยู่ในถังขยะ 30 วัน กู้คืนได้พร้อมรายการทั้งหมด</p>
     <ul class="wm-list" id="wmList"></ul>
+  </dialog>
+
+  <dialog id="notifyMgr" class="sheet picker" aria-labelledby="nmTitle">
+    <div class="picker-head">
+      <h2 id="nmTitle">การแจ้งเตือน</h2>
+      <button type="button" class="btn ghost close" id="nmClose" aria-label="ปิด">✕</button>
+    </div>
+    <p class="muted wm-help">ข้อความที่บอทส่งให้ใน LINE ใช้กับทุกกระเป๋า และเป็นค่าเดียวกับคำสั่งในบอท</p>
+    <ul class="nm-list" id="nmList">
+      <li>
+        <label class="nm-row">
+          <span class="nm-text"><span class="n">📝 เตือนจด</span><span class="s">ทุกวัน 3 ทุ่ม (เวลาไทย) เฉพาะวันที่ยังไม่ได้จด</span></span>
+          <input type="checkbox" role="switch" class="switch" data-kind="remind">
+        </label>
+        <p class="nm-note" id="nmPaused" hidden>⏸ หยุดเตือนชั่วคราว เพราะไม่ได้จดมา 7 วันติด จดรายการเมื่อไหร่จะเตือนต่อให้เอง</p>
+      </li>
+      <li>
+        <label class="nm-row">
+          <span class="nm-text"><span class="n">📅 สรุปรายสัปดาห์</span><span class="s">ทุกวันจันทร์ 09:00 สรุปสัปดาห์ที่แล้ว</span></span>
+          <input type="checkbox" role="switch" class="switch" data-kind="weekly">
+        </label>
+      </li>
+      <li>
+        <label class="nm-row">
+          <span class="nm-text"><span class="n">🗓 สรุปรายเดือน</span><span class="s">ทุกวันที่ 1 เวลา 09:00 สรุปเดือนที่แล้ว</span></span>
+          <input type="checkbox" role="switch" class="switch" data-kind="monthly">
+        </label>
+      </li>
+      <li>
+        <div class="nm-row">
+          <span class="nm-text"><span class="n">🔁 รายการประจำ</span><span class="s" id="nmRec">ตั้งแยกทีละรายการ</span></span>
+        </div>
+        <button type="button" class="linkbtn" id="nmRecGo">ไปที่การ์ดรายการประจำ</button>
+      </li>
+    </ul>
+    <p class="form-error" id="nmError" role="alert" hidden></p>
   </dialog>
 
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>

@@ -92,6 +92,8 @@ their own records. `API_KEY` must never be put in the web page.
 | `GET` | `/api/me-transactions` | `wallet_id`, `month`, `q`, `type`, `category`, `note`, `limit` (≤200), `offset` | Records, newest first; `q` searches notes, `note` is an exact note |
 | `PUT` | `/api/me-transactions` | body: `id`, `exvalue`, `targetdate`, `detail` | Edit a record |
 | `DELETE` | `/api/me-transactions` | `id` | Delete a record |
+| `GET` | `/api/me-notify` | – | Notification switches of the signed-in user: `remind`, `remind_paused`, `weekly`, `monthly` (see [Reminders](#reminders-and-weekly-summary)) |
+| `PUT` | `/api/me-notify` | body: `kind` (`remind` \| `weekly` \| `monthly`), `on` (true/false) | Turn one on/off (same columns as the bot commands); returns all switches |
 | `GET` | `/api/me-recurring` | `wallet_id` | Recurring items of the wallet (`id`, `exvalue`, `note`, `category`, `day`, `notify`, `paused`, `next_date`) and `limit` |
 | `POST` | `/api/me-recurring` | body: `wallet_id`, `exvalue`, `note`, `day` (1–31), optional `category`, `notify` | Add a recurring item (no category: picked from the note) |
 | `PUT` | `/api/me-recurring` | body: `id` and any of `exvalue`, `note`, `day`, `category`, `notify`, `paused` | Edit, pause or resume |
@@ -272,6 +274,13 @@ the user turns them on in the bot (or with the buttons on the help card):
 | "ปิดเตือนจด" / "remind off" | Daily reminder off |
 | "เปิดสรุปรายสัปดาห์" / "weekly on" | Weekly summary on |
 | "ปิดสรุปรายสัปดาห์" / "weekly off" | Weekly summary off |
+
+The web app's 🔔 button (next to ⚙ in the top bar) opens "การแจ้งเตือน" with
+switches for the reminder, the weekly summary and the monthly summary
+(`/api/me-notify`, the same `USERS` columns as the bot commands, so both stay in
+step; per user, not per wallet). It says when the reminder is paused after 7
+days with no record, and shows how many of the current wallet's recurring items
+notify in LINE, with a link to the "รายการประจำ" card (set per item there).
 
 - **Reminder** — every day at 21:00 Thai time (`0 14 * * *`,
   `scripts/notify.sh remind`). A user gets a push only if they have no record

@@ -1569,6 +1569,66 @@
     sel.value = String(state.wallet.wallet_id);
   }
 
+  // ---------- 🔔 notification settings (per user; same switches as the bot's commands)
+  const nm = $("notifyMgr");
+  const nmSwitches = [...nm.querySelectorAll("input.switch[data-kind]")];
+  let nmSeq = 0;
+  const NOTIFY_NAMES = { remind: "เตือนจด", weekly: "สรุปรายสัปดาห์", monthly: "สรุปรายเดือน" };
+  function nmError(msg) {
+    $("nmError").textContent = msg || "";
+    $("nmError").hidden = !msg;
+  }
+  function renderNotify(d) {
+    for (const sw of nmSwitches) sw.checked = !!d[sw.dataset.kind];
+    $("nmPaused").hidden = !(d.remind && d.remind_paused);
+  }
+  function renderNotifyRec() {
+    const items = (state.rec && state.rec.items) || [];
+    const on = items.filter((x) => x.notify && !x.paused).length;
+    $("nmRec").textContent = !state.rec ? "ตั้งแยกทีละรายการ ในการ์ดรายการประจำ"
+      : !items.length ? "กระเป๋านี้ยังไม่มีรายการประจำ"
+      : `กระเป๋านี้แจ้งใน LINE ${on} จาก ${items.length} รายการ (ตั้งแยกทีละรายการ)`;
+  }
+  async function openNotifyMgr() {
+    const seq = ++nmSeq;
+    nmError("");
+    $("nmPaused").hidden = true;
+    for (const sw of nmSwitches) sw.disabled = true;
+    renderNotifyRec();
+    if (nm.showModal) nm.showModal(); else nm.setAttribute("open", "");
+    try {
+      const d = await api("me-notify");
+      if (seq !== nmSeq) return;
+      renderNotify(d);
+      for (const sw of nmSwitches) sw.disabled = false;
+    } catch (e) {
+      if (e instanceof AuthError || seq !== nmSeq) return;
+      nmError("โหลดการตั้งค่าไม่สำเร็จ · " + errText(e, "ลองใหม่อีกครั้ง"));
+    }
+  }
+  function closeNotifyMgr() {
+    nmSeq++;
+    if (nm.close) nm.close(); else nm.removeAttribute("open");
+  }
+  async function toggleNotify(sw) {
+    const on = sw.checked;
+    const seq = nmSeq;
+    sw.disabled = true;
+    nmError("");
+    try {
+      const d = await api("me-notify", { method: "PUT", body: { kind: sw.dataset.kind, on } });
+      if (seq !== nmSeq) return;
+      renderNotify(d);
+      showToast(`${on ? "เปิด" : "ปิด"}${NOTIFY_NAMES[sw.dataset.kind]}แล้ว`);
+    } catch (e) {
+      if (seq !== nmSeq) return;
+      sw.checked = !on;
+      if (!(e instanceof AuthError)) nmError("บันทึกไม่สำเร็จ · " + errText(e, "ลองใหม่อีกครั้ง"));
+    } finally {
+      if (seq === nmSeq) sw.disabled = false;
+    }
+  }
+
   // ---------- wallet manager (rename / delete)
   const wm = $("walletMgr");
   let wmData = null;
@@ -2407,6 +2467,19 @@
     });
   }
   $("walletManage").addEventListener("click", openWalletMgr);
+  $("notifyOpen").addEventListener("click", openNotifyMgr);
+  $("nmClose").addEventListener("click", closeNotifyMgr);
+  for (const sw of nmSwitches) sw.addEventListener("change", () => toggleNotify(sw));
+  nm.addEventListener("click", (e) => {
+    if (e.target !== nm) return;
+    const r = nm.getBoundingClientRect();
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) closeNotifyMgr();
+  });
+  nm.addEventListener("close", () => { nmSeq++; });
+  $("nmRecGo").addEventListener("click", () => {
+    closeNotifyMgr();
+    $("recCard").scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+  });
   $("wmClose").addEventListener("click", closeWalletMgr);
   wm.addEventListener("click", (e) => {
     if (e.target !== wm) return;
