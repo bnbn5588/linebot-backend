@@ -1847,12 +1847,32 @@
   // me-notes of the current wallet, loaded once (one request at a time);
   // false when the wallet changed meanwhile
   let notesLoading = null;
+  // More notes than me-notes sends (the most used 1000): the rest are found
+  // with a server search (?q=). Results kept until the notes are reloaded.
+  const noteSearchCache = new Map();
+  const searchKey = (text, kind, limit) => `${state.wallet.wallet_id}|${kind || ""}|${limit}|${text}`;
+  async function searchNotes(text, kind, limit) {
+    const key = searchKey(text, kind, limit);
+    if (!noteSearchCache.has(key)) {
+      const p = api("me-notes?" + q({ wallet_id: state.wallet.wallet_id, q: text, kind, limit }))
+        .then((d) => d.notes)
+        .catch((e) => { noteSearchCache.delete(key); throw e; });
+      noteSearchCache.set(key, p);
+    }
+    return noteSearchCache.get(key);
+  }
+  const searchDone = new Map(); // key -> notes, once the search finished
   async function ensureNotes() {
     if (state.allNotes) return true;
     const wallet = state.wallet.wallet_id;
     if (!notesLoading || notesLoading.wallet !== wallet) {
       const p = api("me-notes?" + q({ wallet_id: wallet })).then((data) => {
-        if (wallet === state.wallet.wallet_id) state.allNotes = data.notes;
+        if (wallet === state.wallet.wallet_id) {
+          state.allNotes = data.notes;
+          state.notesTruncated = !!data.truncated;
+          noteSearchCache.clear();
+          searchDone.clear();
+        }
       }).finally(() => { if (notesLoading && notesLoading.p === p) notesLoading = null; });
       notesLoading = { wallet, p };
     }
@@ -1867,9 +1887,9 @@
   // Each row: note, times used, last date and amount. Tap = use it.
   const SUGGEST_MAX = 5;
   const normNote = (t) => String(t || "").toLowerCase().replace(/\s+/g, "");
-  function shortDay(day) {
+  function shortDay(day, year) {
     const [y, m, d] = day.split("-").map(Number);
-    const thisYear = nowLocal(state.wallet.timezone).date.slice(0, 4) === String(y);
+    const thisYear = year === String(y);
     return `${d} ${MONTHS_TH[m - 1]}${thisYear ? "" : " " + String((y + 543) % 100).padStart(2, "0")}`;
   }
   function noteSuggest(input, { kind, onPick }) {
@@ -1899,6 +1919,7 @@
       hide();
       onPick(n);
     };
+    let searchTimer = 0;
     const render = () => {
       const k = kind();
       const text = normNote(input.value);
@@ -1907,7 +1928,24 @@
         rows = rows.filter((n) => normNote(n.note).includes(text));
         rows = [...rows.filter((n) => normNote(n.note).startsWith(text)), ...rows.filter((n) => !normNote(n.note).startsWith(text))];
       }
+      // only the most used notes were loaded: ask the server for the rest
+      // (the loaded ones show at once; the search result replaces them)
+      clearTimeout(searchTimer);
+      if (text && state.notesTruncated) {
+        const key = searchKey(text, k, SUGGEST_MAX);
+        if (searchDone.has(key)) rows = searchDone.get(key);
+        else {
+          const my = seq;
+          searchTimer = setTimeout(() => {
+            searchNotes(text, k, SUGGEST_MAX).then((notes) => {
+              searchDone.set(key, notes);
+              if (my === seq && dialog.open && normNote(input.value) === text && kind() === k) render();
+            }, () => { /* keep the loaded ones */ });
+          }, 200);
+        }
+      }
       shown = rows.slice(0, SUGGEST_MAX);
+      const year = shown.length ? nowLocal(state.wallet.timezone).date.slice(0, 4) : "";
       // the field already says exactly the only match: nothing to suggest
       if (!shown.length || (shown.length === 1 && text && normNote(shown[0].note) === text)) return hide();
       active = -1;
@@ -1918,7 +1956,7 @@
         const cat = n.last_category && state.categories.find((c) => c.key === n.last_category);
         li.append(
           el("span", "t", `${cat ? cat.icon + " " : ""}${n.text || n.note}`),
-          el("span", "m", `${n.count} ครั้ง · ล่าสุด ${n.last ? shortDay(n.last) + " " : ""}${money(n.last_value ?? 0, true)}`)
+          el("span", "m", `${n.count} ครั้ง · ล่าสุด ${n.last ? shortDay(n.last, year) + " " : ""}${money(n.last_value ?? 0, true)}`)
         );
         // keep the focus in the field (no blur before the tap)
         li.addEventListener("pointerdown", (e) => e.preventDefault());
@@ -1945,7 +1983,7 @@
     dialog.addEventListener("focusin", (e) => {
       if (e.target !== input && /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) { seq++; hide(); }
     });
-    dialog.addEventListener("close", () => { seq++; hide(); });
+    dialog.addEventListener("close", () => { seq++; clearTimeout(searchTimer); hide(); });
     input.addEventListener("keydown", (e) => {
       if (list.hidden || !shown.length) return;
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
@@ -1965,13 +2003,35 @@
   function closeNotePicker() {
     if (picker.close) picker.close(); else picker.removeAttribute("open");
   }
+  let pickerSeq = 0;
   function renderNotePicker() {
     if (!state.allNotes) return;
     const type = pickerType();
     const text = $("npFilter").value.trim().toLowerCase();
-    const shown = state.allNotes.filter((n) => {
+    const my = ++pickerSeq;
+    let source = state.allNotes;
+    // only the most used notes were loaded: search the server for the rest
+    const needle = normNote(text);
+    if (needle && state.notesTruncated) {
+      const key = searchKey(needle, "", 300);
+      if (searchDone.has(key)) source = searchDone.get(key);
+      else {
+        $("npList").replaceChildren(el("li", "empty", "กำลังค้นหา…"));
+        setTimeout(() => {
+          if (my !== pickerSeq) return;
+          searchNotes(needle, "", 300).then((notes) => {
+            searchDone.set(key, notes);
+            if (my === pickerSeq && picker.open) renderNotePicker();
+          }, (e) => {
+            if (my === pickerSeq && !(e instanceof AuthError)) $("npList").replaceChildren(el("li", "empty", "ค้นหาไม่สำเร็จ ลองใหม่อีกครั้ง"));
+          });
+        }, 250);
+        return;
+      }
+    }
+    const shown = source.filter((n) => {
       const kind = n.total > 0 ? "income" : "expense";
-      return (type === "all" || kind === type) && (!text || n.note.includes(text));
+      return (type === "all" || kind === type) && (!text || source !== state.allNotes || n.note.includes(text));
     });
     const list = $("npList");
     if (!shown.length) {

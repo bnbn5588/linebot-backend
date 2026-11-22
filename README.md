@@ -88,7 +88,7 @@ their own records. `API_KEY` must never be put in the web page.
 |---|---|---|---|
 | `GET` | `/api/me` | – | Current wallet and all wallets (404 `NO_WALLET` if the user never created one) |
 | `GET` | `/api/me-summary` | `wallet_id`, `month` (`YYYY-MM`), `type`, `category`, `note` | Totals, income/expense/balance per month, totals by note and by category for the month (each note and category with `prev_total`, the month before — only the same days so far when `month` is the current month, see `compare.prev_days` — and `avg_total`, the average of the 3 months before over `compare.avg_months` months with records); with `category` and/or `note` (exact, lower-case trimmed like the by-note list), `filter_months` (also sent as the old name `category_months`); with `month`, `days` — income/expense/balance/count per day of that month that has records (category / note filter applied) |
-| `GET` | `/api/me-notes` | `wallet_id` | Every note of the wallet, most used first (`note` key, `count`, `total`, `last` date, and from the newest record `text` as typed, `last_category`, `last_value`); for the "เลือกโน้ต" picker and the note suggestions |
+| `GET` | `/api/me-notes` | `wallet_id`, optional `q`, `kind` (`income` \| `expense`), `limit` (1–300) | Notes of the wallet, most used first, up to 1000 (`truncated` when there are more): `note` key, `count`, `total`, `last` date, and from the newest record `text` as typed, `last_category`, `last_value`; for the "เลือกโน้ต" picker and the note suggestions. With `q`: only notes containing it (spaces and case ignored), starts-with first, `kind` by the newest record's sign, up to `limit` (default 50) |
 | `GET` | `/api/me-transactions` | `wallet_id`, `month`, `q`, `type`, `category`, `note`, `limit` (≤200), `offset` | Records, newest first; `q` searches notes, `note` is an exact note |
 | `PUT` | `/api/me-transactions` | body: `id`, `exvalue`, `targetdate`, `detail` | Edit a record |
 | `DELETE` | `/api/me-transactions` | `id` | Delete a record |
@@ -125,7 +125,10 @@ one fills the note as last typed and, while adding with "ให้ระบบ�
 last category. Arrow keys + Enter pick, Esc closes the list. The list sits in
 the form (it pushes the fields down, never covers บันทึก / ยกเลิก) and closes when
 another field gets the focus. Notes come from
-`/api/me-notes`, loaded once per wallet. It runs inside
+`/api/me-notes`, loaded once per wallet (the 1000 most used). A wallet with
+more notes than that also searches the server (`?q=`, 200 ms after typing
+stops, results kept until the notes reload), so rarely used notes are still
+suggested and found by the "เลือกโน้ต" filter. It runs inside
 LINE (LIFF) or in a desktop browser via `https://liff.line.me/<LIFF ID>`.
 
 Setup in LINE Developers Console:
