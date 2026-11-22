@@ -253,7 +253,7 @@
       const tr = el("tr");
       const st = el("td");
       st.append(status(part, unit));
-      tr.append(el("td", "", name), el("td", "", when), who, last, st);
+      tr.append(el("td", "", name), st, el("td", "", when), who, last); // status 2nd: visible on phones
       return tr;
     };
     const rm = j.remind, wk = j.weekly, mo = j.monthly, rc = j.recurring, tr = j.trash;
@@ -291,7 +291,7 @@
     const f = j.push_forecast, meter = $("pushMeter");
     const used = line && line.configured ? line.consumption : null;
     const limit = line && line.quota && line.quota.type === "limited" ? line.quota.value : null;
-    const parts = `เตือนจด ${num.format(f.reminders)} · สรุปรายสัปดาห์ ${num.format(f.weekly)} · รายการประจำ ${num.format(f.recurring)}`;
+    const parts = `เตือนจด ${num.format(f.reminders)} · สรุปรายสัปดาห์ ${num.format(f.weekly)}` + (f.monthly ? ` · สรุปรายเดือน ${num.format(f.monthly)}` : "") + ` · รายการประจำ ${num.format(f.recurring)}`;
     if (used === null || used === undefined) {
       meter.replaceChildren(el("div", "muted", `อ่านยอดที่ใช้ไปจาก LINE ไม่ได้ · ที่เหลือของเดือนสูงสุด ${num.format(f.total)} ข้อความ`));
       $("pushNote").textContent = parts;
@@ -311,9 +311,10 @@
         meter.replaceChildren(bar, cap);
         if (pct >= 90) alerts.push([pct >= 100 ? "bad" : "warn", `คาดว่าข้อความ push เดือนนี้จะถึง ${pct.toFixed(0)}% ของโควต้า งานส่งข้อความจะหยุดเองที่ 90%`]);
       } else {
-        meter.replaceChildren(el("div", "muted", `ใช้แล้ว ${num.format(used)} + อีกสูงสุด ${num.format(f.total)} = ${num.format(total)} ข้อความ (โควต้าไม่จำกัด)`));
+        const why = line.quota && line.quota.type === "none" ? "โควต้าไม่จำกัด" : "อ่านโควต้าจาก LINE ไม่ได้";
+        meter.replaceChildren(el("div", "muted", `ใช้แล้ว ${num.format(used)} + อีกสูงสุด ${num.format(f.total)} = ${num.format(total)} ข้อความ (${why})`));
       }
-      $("pushNote").textContent = `ที่เหลือของเดือน: ${parts} · สรุปรายเดือนนับเข้าเดือนถัดไป`;
+      $("pushNote").textContent = `ที่เหลือของเดือน: ${parts} · สรุปรายเดือนของวันที่ 1 นับเข้าเดือนถัดไป`;
     }
     $("jobsAlerts").replaceChildren(...alerts.map(([cls, t]) => el("li", cls, "⚠️ " + t)));
   }

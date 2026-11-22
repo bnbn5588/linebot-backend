@@ -16,8 +16,11 @@ const GRACE_MIN = 60; // a job counts as late this long after its start time
 const thai = (now) => moment.tz(now, "Asia/Bangkok");
 const after = (t, hhmm) => t.format("HH:mm") >= hhmm;
 const plusGrace = (hhmm) => moment.utc(hhmm, "HH:mm").add(GRACE_MIN, "minutes").format("HH:mm");
-const ACTIVE_REC = `FROM expense e JOIN wallet w ON w.uname = e.uname AND w.wallet_id = e.wallet_id AND w.deleted_at IS NULL
-  WHERE e.uname = u.uname AND e.recurring_id IS NULL`;
+// DB dates (remind_on, weekly_on, SYSDATE) are UTC: Thai = UTC + 7 h
+const ANY_REC = `FROM expense e JOIN wallet w ON w.uname = e.uname AND w.wallet_id = e.wallet_id AND w.deleted_at IS NULL
+  WHERE e.uname = u.uname`;
+// the reminder ignores records the recurring run made
+const ACTIVE_REC = `${ANY_REC} AND e.recurring_id IS NULL`;
 
 async function optional(fn) {
   try {
@@ -39,12 +42,14 @@ async function remind(c, t) {
             max(u.remind_last)
        FROM users u WHERE u.remind_on IS NOT NULL`, { max: REMIND_PAUSE_AFTER });
   const [lastSent] = lastDay ? await one(c, "SELECT count(*) FROM users WHERE remind_on IS NOT NULL AND remind_last = :d", { d: lastDay }) : [0];
-  // users the run of `ref` should have reminded but did not (on before that
-  // day, not paused, not "วันนี้ไม่ได้ใช้เงิน", no record that day)
+  // users the run of `ref` should have reminded but did not (on before 21:00
+  // Thai = 14:00 UTC that day, not paused — a record since the last reminder
+  // un-pauses — not "วันนี้ไม่ได้ใช้เงิน", no record that day)
   const [late] = await one(c,
     `SELECT count(*) FROM users u
-      WHERE u.remind_on IS NOT NULL AND u.remind_on < TO_DATE(:ref, 'YYYY-MM-DD')
-        AND u.remind_streak < :max
+      WHERE u.remind_on IS NOT NULL AND u.remind_on < TO_DATE(:ref, 'YYYY-MM-DD') + 14/24
+        AND (u.remind_streak < :max OR EXISTS (SELECT 1 ${ACTIVE_REC}
+              AND e.fulldate >= TO_DATE(u.remind_last, 'YYYY-MM-DD')))
         AND (u.remind_last IS NULL OR u.remind_last < :ref)
         AND (u.remind_skip IS NULL OR u.remind_skip <> :ref)
         AND NOT EXISTS (SELECT 1 ${ACTIVE_REC}
@@ -62,8 +67,8 @@ async function weekly(c, t) {
     `SELECT count(*),
             count(CASE WHEN u.weekly_sent >= :week THEN 1 END),
             count(CASE WHEN (u.weekly_sent IS NULL OR u.weekly_sent < :week)
-                        AND u.weekly_on < TO_DATE(:end, 'YYYY-MM-DD') + 9/24
-                        AND EXISTS (SELECT 1 ${ACTIVE_REC}
+                        AND u.weekly_on < TO_DATE(:end, 'YYYY-MM-DD') + 2/24
+                        AND EXISTS (SELECT 1 ${ANY_REC}
                               AND e.fulldate >= TO_DATE(:week, 'YYYY-MM-DD') AND e.fulldate < TO_DATE(:end, 'YYYY-MM-DD')) THEN 1 END)
        FROM users u WHERE u.weekly_on IS NOT NULL`, { week, end });
   return { on, week, sent, late };
@@ -77,7 +82,7 @@ async function monthly(c, t) {
     `SELECT count(*), count(u.summary_off),
             count(CASE WHEN u.summary_sent >= :month THEN 1 END),
             count(CASE WHEN u.summary_off IS NULL AND (u.summary_sent IS NULL OR u.summary_sent < :month)
-                        AND EXISTS (SELECT 1 ${ACTIVE_REC}
+                        AND EXISTS (SELECT 1 ${ANY_REC}
                               AND e.fulldate >= TO_DATE(:s, 'YYYY-MM-DD') AND e.fulldate < ADD_MONTHS(TO_DATE(:s, 'YYYY-MM-DD'), 1)) THEN 1 END)
        FROM users u`, { month, s: start });
   return { month, users, on: users - off, sent, late };
@@ -119,7 +124,7 @@ async function trash(c) {
 // Upper bound of the pushes still to come this month (LINE counts per month):
 // a reminder every evening to every user with it on and not paused, the weekly
 // card every Monday, and one recurring message per user and due day.
-function pushForecast(t, { remind: rm, weekly: wk, recurring: rc }) {
+function pushForecast(t, { remind: rm, weekly: wk, monthly: mo, recurring: rc }) {
   const end = t.clone().endOf("month");
   let evenings = end.date() - t.date() + (after(t, "21:00") ? 0 : 1);
   let mondays = 0;
@@ -129,7 +134,9 @@ function pushForecast(t, { remind: rm, weekly: wk, recurring: rc }) {
   const reminders = rm ? Math.max(0, rm.on - rm.paused) * evenings : 0;
   const weeklyCards = wk ? wk.on * mondays : 0;
   const recurringMsgs = rc ? rc.pushes_left : 0;
-  return { reminders, weekly: weeklyCards, recurring: recurringMsgs, total: reminders + weeklyCards + recurringMsgs };
+  // the monthly summary is still to come only on the 1st before 09:00
+  const monthlyMsgs = mo && t.date() === 1 && !after(t, "09:00") ? mo.on : 0;
+  return { reminders, weekly: weeklyCards, monthly: monthlyMsgs, recurring: recurringMsgs, total: reminders + weeklyCards + monthlyMsgs + recurringMsgs };
 }
 
 async function jobsStatus(connection, now = new Date()) {

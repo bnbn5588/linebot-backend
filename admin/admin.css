@@ -196,7 +196,8 @@ h2 { font-size: 14px; margin: 0; font-weight: 600; }
 .alerts:empty { display: none; }
 .alerts li { padding: 8px 12px; border-radius: 10px; background: var(--surface-2); border-left: 4px solid var(--warning); font-size: 14px; }
 .alerts li.bad { border-left-color: var(--critical); }
-.t.jobs td:nth-child(2) { white-space: nowrap; color: var(--text-secondary); }
+.t.jobs td:nth-child(2), .t.jobs td:nth-child(3) { white-space: nowrap; }
+.t.jobs td:nth-child(3) { color: var(--text-secondary); }
 .t.jobs .sub { display: block; font-size: 12px; color: var(--text-muted); }
 .meter .fill.warn { background: var(--warning); }
 .meter .fill.bad { background: var(--critical); }
