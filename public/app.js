@@ -1862,6 +1862,7 @@
     return noteSearchCache.get(key);
   }
   const searchDone = new Map(); // key -> notes, once the search finished
+  let notesGen = 0; // bumped when the notes reload: older search answers are dropped
   async function ensureNotes() {
     if (state.allNotes) return true;
     const wallet = state.wallet.wallet_id;
@@ -1872,6 +1873,7 @@
           state.notesTruncated = !!data.truncated;
           noteSearchCache.clear();
           searchDone.clear();
+          notesGen++;
         }
       }).finally(() => { if (notesLoading && notesLoading.p === p) notesLoading = null; });
       notesLoading = { wallet, p };
@@ -1937,7 +1939,9 @@
         else {
           const my = seq;
           searchTimer = setTimeout(() => {
+            const gen = notesGen;
             searchNotes(text, k, SUGGEST_MAX).then((notes) => {
+              if (gen !== notesGen) return;
               searchDone.set(key, notes);
               if (my === seq && dialog.open && normNote(input.value) === text && kind() === k) render();
             }, () => { /* keep the loaded ones */ });
@@ -2019,7 +2023,9 @@
         $("npList").replaceChildren(el("li", "empty", "กำลังค้นหา…"));
         setTimeout(() => {
           if (my !== pickerSeq) return;
+          const gen = notesGen;
           searchNotes(needle, "", 300).then((notes) => {
+            if (gen !== notesGen) return;
             searchDone.set(key, notes);
             if (my === pickerSeq && picker.open) renderNotePicker();
           }, (e) => {
